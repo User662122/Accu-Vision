@@ -942,7 +942,7 @@ namespace AccuVisionRepost.Ui
             return m + 1;
         }
 
-        private void AddEffLine()
+        private void AddLedgerLine()
         {
             if (_v == null) return;
             DataTable t = _v.T("EFF");
