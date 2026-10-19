@@ -115,7 +115,14 @@ namespace AccuVisionRepost.Core
             object cat = Activator.CreateInstance(catType);
             catType.InvokeMember("Create", System.Reflection.BindingFlags.InvokeMethod, null, cat,
                 new object[] { "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + path + ";Jet OLEDB:Engine Type=5;" });
-            System.Runtime.InteropServices.Marshal.ReleaseComObject(cat);
+            // ADOX stays connected to the brand-new database until every COM
+            // reference is gone; without a full release + GC, later EXCLUSIVE
+            // opens fail with "already opened exclusively by user 'Admin'".
+            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(cat);
+            cat = null;
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
         }
 
         private static void Ddl(JetDb jet, OleDbConnection cn, string sql)
