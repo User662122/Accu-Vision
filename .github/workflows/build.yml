@@ -1,0 +1,39 @@
+name: Build AccuVisionRepost.exe
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build (Release, x86 - Jet OLEDB is 32-bit only)
+        shell: pwsh
+        run: msbuild src\AccuVisionRepost\AccuVisionRepost.csproj /t:Rebuild /p:Configuration=Release /p:Platform=x86
+
+      - name: Run posting-engine self-test
+        shell: pwsh
+        run: |
+          $exe = "src\AccuVisionRepost\bin\x86\Release\AccuVisionRepost.exe"
+          $work = Join-Path $env:RUNNER_TEMP "selftest"
+          New-Item -ItemType Directory -Force $work | Out-Null
+          $p = Start-Process -FilePath $exe -ArgumentList @("/selftest", $work) -Wait -PassThru -NoNewWindow
+          Write-Host "ExitCode=$($p.ExitCode)"
+          $marker = Join-Path $work "selftest_result.txt"
+          if (Test-Path $marker) { Get-Content $marker }
+          if ($p.ExitCode -ne 0) { throw "SelfTest failed" }
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: AccuVisionRepost
+          path: |
+            src\AccuVisionRepost\bin\x86\Release\AccuVisionRepost.exe
+            src\AccuVisionRepost\bin\x86\Release\AccuVisionRepost.exe.config

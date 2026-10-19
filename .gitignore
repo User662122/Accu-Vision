@@ -1,0 +1,16 @@
+# Build output
+**/bin/
+**/obj/
+dist/
+
+# AccNew databases / backups must never be committed
+*.mdb
+*.Mdb
+*.ldb
+**/AccuVision_Backups/
+Accurate_SelfTest.*
+selftest_result.txt
+
+# Misc
+.vs/
+*.user
