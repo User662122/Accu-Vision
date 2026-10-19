@@ -97,8 +97,7 @@ namespace AccuVisionRepost.Ui
             _tabs = new TabControl();
             _tabs.Dock = DockStyle.Fill;
             Controls.Add(_tabs);
-            _tabs.BringToFront();
-            top.BringToFront();
+            _tabs.BringToFront(); // Fill control must be top of z-order (docked last)
 
             TabPage tabFind = new TabPage("1. Find Previous Entry");
             _tabEdit = new TabPage("2. Edit New Entry");
@@ -298,9 +297,7 @@ namespace AccuVisionRepost.Ui
             _editTabs = new TabControl();
             _editTabs.Dock = DockStyle.Fill;
             tab.Controls.Add(_editTabs);
-            _editTabs.BringToFront();
-            head.BringToFront();
-            bottom.BringToFront();
+            _editTabs.BringToFront(); // Fill control must be top of z-order (docked last)
 
             _tabEff = new TabPage("Ledger Lines");
             _tabItems = new TabPage("Item Lines (Sales)");
@@ -384,7 +381,7 @@ namespace AccuVisionRepost.Ui
 
         private void AddToolbar(TabPage tab, string addText, string delText, Action onAdd, Action onDelete)
         {
-            Panel p = new Panel(); p.Dock = DockStyle.Bottom; p.Height = 34; tab.Controls.Add(p); p.BringToFront();
+            Panel p = new Panel(); p.Dock = DockStyle.Bottom; p.Height = 34; tab.Controls.Add(p); p.SendToBack(); // edge-docked: must be carved before the Fill grid
             int x = 4;
             if (addText != null)
             {
