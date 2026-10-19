@@ -23,7 +23,7 @@ namespace AccuVisionRepost.Core
         public JetDb(string dbPath, string Password)
         {
             DbPath = dbPath;
-            Password = Password ?? "";
+            this.Password = Password ?? "";
             _columns = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             _tableNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _colMaxLen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
