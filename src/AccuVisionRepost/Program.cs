@@ -22,9 +22,20 @@ namespace AccuVisionRepost
                 {
                     AttachConsole(-1);
                     string dir = (i + 1 < args.Length) ? args[i + 1] : Path.GetTempPath();
+                    // Mirror console output to a file: on CI runners there is
+                    // often no parent console, so stdout alone would vanish.
+                    try
+                    {
+                        Directory.CreateDirectory(dir);
+                        StreamWriter logFile = new StreamWriter(Path.Combine(dir, "selftest_log.txt"), false);
+                        logFile.AutoFlush = true;
+                        Console.SetOut(new TeeWriter(Console.Out, logFile));
+                    }
+                    catch { }
                     int code = SelfTest.Run(dir);
                     try { File.WriteAllText(Path.Combine(dir, "selftest_result.txt"), code == 0 ? "SELFTEST PASSED" : "SELFTEST FAILED " + code); }
                     catch { }
+                    Console.Out.Flush();
                     return code;
                 }
                 if (a == "/probe" || a == "--probe")
