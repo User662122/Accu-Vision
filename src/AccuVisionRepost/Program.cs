@@ -57,6 +57,19 @@ namespace AccuVisionRepost
             return 0;
         }
 
+        /// <summary>Writes to two writers (console + log file) at once.</summary>
+        private sealed class TeeWriter : System.IO.TextWriter
+        {
+            private readonly System.IO.TextWriter _a;
+            private readonly System.IO.TextWriter _b;
+            public TeeWriter(System.IO.TextWriter a, System.IO.TextWriter b) { _a = a; _b = b; }
+            public override System.Text.Encoding Encoding { get { return _a.Encoding; } }
+            public override void Write(char value) { try { _a.Write(value); } catch { } try { _b.Write(value); } catch { } }
+            public override void Write(string value) { try { _a.Write(value); } catch { } try { _b.Write(value); } catch { } }
+            public override void WriteLine(string value) { try { _a.WriteLine(value); } catch { } try { _b.WriteLine(value); } catch { } }
+            public override void Flush() { try { _a.Flush(); } catch { } try { _b.Flush(); } catch { } }
+        }
+
         private static int Probe(string dbPath, string pwd)
         {
             try
