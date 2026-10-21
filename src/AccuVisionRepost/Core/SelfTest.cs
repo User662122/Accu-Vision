@@ -198,7 +198,7 @@ namespace AccuVisionRepost.Core
             Check(rc == 3, "CLI review duplicate TAX_INV_NO returns exit code 3, got " + rc);
             Check(File.ReadAllText(dupInvStatus).Contains("STATUS=ERROR") && File.ReadAllText(dupInvStatus).Contains("already exists"),
                 "CLI duplicate TAX_INV_NO recorded in status file");
-            Check(File.ReadAllText(dupInvJson).Contains("\"ok\": false") && File.ReadAllText(dupInvJson).Contains("TAX_INV_NO '134' already exists"),
+            Check(File.ReadAllText(dupInvJson).Contains("\"ok\": false") && File.ReadAllText(dupInvJson).Contains("TAX Invoice No '134' already exists"),
                 "CLI duplicate TAX_INV_NO recorded in JSON errors[]");
 
             // 4b. Out-of-financial-year date error
@@ -251,13 +251,26 @@ namespace AccuVisionRepost.Core
             Check(rc == 3 && File.ReadAllText(unbalErrJson).Contains("Ledger lines do not balance"),
                 "CLI unbalanced JV rejected with exit code 3");
 
-            // 4f. Warning vs --strict mode (Sales item 14 has negative stock -144 -> warning)
+            // 4f. Warning vs --strict mode (CB voucher with non-Bank/Cash accounts -> warning)
+            string warnJson = Path.Combine(workDir, "warn_cb.json");
             rc = HeadlessCli.Run(new string[]
             {
                 "review", "--db", db, "--pwd", "",
-                "--uid", "102", "--new-date", "2026-06-10", "--tax-inv-mode", "offset", "--strict"
+                "--uid", "103", "--new-date", "2026-06-10",
+                "--dr-acc", "A000002032", "--cr-acc", "A000001303",
+                "--json-out", warnJson
             });
-            Check(rc == 3, "CLI --strict turns negative stock warning into exit code 3");
+            Check(rc == 0 && File.ReadAllText(warnJson).Contains("Bank/Cash type account"),
+                "CLI review without --strict allows warning with exit code 0");
+
+            rc = HeadlessCli.Run(new string[]
+            {
+                "review", "--db", db, "--pwd", "",
+                "--uid", "103", "--new-date", "2026-06-10",
+                "--dr-acc", "A000002032", "--cr-acc", "A000001303",
+                "--strict"
+            });
+            Check(rc == 3, "CLI --strict turns warning into exit code 3");
 
             // 4g. Bad CLI option -> exit code 2
             rc = HeadlessCli.Run(new string[] { "review", "--db", db, "--no-such-flag" });
@@ -358,7 +371,7 @@ namespace AccuVisionRepost.Core
                 form.HeadlessOpenReview();
                 form.HeadlessSetConfirm(true, true);
                 Check(!form.IsPostButtonEnabled, "MainForm disables Post button when live DB has duplicate TAX_INV_NO '134'");
-                Check(form.CurrentReviewText.Contains("TAX_INV_NO '134' already exists"), "MainForm Review text displays live DB duplicate TAX_INV_NO error");
+                Check(form.CurrentReviewText.Contains("TAX Invoice No '134' already exists"), "MainForm Review text displays live DB duplicate TAX_INV_NO error");
 
                 // Switch back to unique TAX_INV_NO and post headlessly through MainForm
                 form.HeadlessSetTaxInvManual("INV-UI-805");
