@@ -835,6 +835,22 @@ namespace AccuVisionRepost.Core
             return rows;
         }
 
+        public static List<string[]> ReadFile(string path, char sep)
+        {
+            return ReadRows(File.ReadAllText(path, Encoding.UTF8), sep);
+        }
+
+        public static void WriteFile(string path, string[] headers, List<string[]> rows, char sep)
+        {
+            StringBuilder sb = new StringBuilder();
+            if (headers != null) sb.AppendLine(JoinRow(headers, sep));
+            if (rows != null)
+                foreach (string[] r in rows) sb.AppendLine(JoinRow(r, sep));
+            string dir = Path.GetDirectoryName(Path.GetFullPath(path));
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+        }
+
         private static string[] SplitLine(string line, char sep)
         {
             if (sep == '\t') return line.Split('\t');

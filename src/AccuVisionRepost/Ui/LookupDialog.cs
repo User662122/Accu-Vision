@@ -148,7 +148,7 @@ namespace AccuVisionRepost.Ui
             if (mf != null && mf.HeadlessMode)
             {
                 List<string> errs = new List<string>();
-                AccountRow resolved = HeadlessEngine.ResolveAccount(probe, initial, "Account", errs);
+                AccountRow resolved = HeadlessEngine.ResolveAccount(probe, initial, true, "Account", errs);
                 if (resolved != null) return resolved;
                 foreach (string e in errs) mf.RecordHeadlessMessage("Select Account", e, MessageBoxIcon.Warning);
                 return null;
