@@ -36,6 +36,7 @@ namespace AccuVisionRepost.Core
                 d["srcDate"] = Helpers.FmtDateIso(Voucher.SrcDate);
                 d["newDate"] = Helpers.FmtDateIso(Voucher.NewDate);
                 d["newBook"] = Voucher.NewTranType;
+                d["narration"] = Voucher.Inf == null ? "" : JetDb.GetStr(Voucher.Inf, "Naration");
                 d["drTotal"] = Voucher.EffTotal("D");
                 d["crTotal"] = Voucher.EffTotal("C");
                 if (Voucher.Kind == VoucherKind.Sales && Voucher.Pth != null)
@@ -1436,6 +1437,7 @@ namespace AccuVisionRepost.Core
                 sb.AppendLine(string.Format("  Date: {0}    New Vch No: {1}    New ID_NO: {2}    New UId: {3}",
                     Helpers.FmtDate(v.NewDate), (plan.NewVchNo ?? "").Trim(), plan.NewIDNo, plan.NewUId));
                 if (v.Kind == VoucherKind.Sales) sb.AppendLine("  TAX Invoice No: " + plan.NewTaxInvNo);
+                if (v.Inf != null) sb.AppendLine("  Narration: " + JetDb.GetStr(v.Inf, "Naration"));
                 sb.AppendLine("  (Numbers are re-checked inside the posting transaction - if another user posts first, the next free number is used.)");
             }
             sb.AppendLine();
@@ -1476,10 +1478,12 @@ namespace AccuVisionRepost.Core
                 {
                     int ic = JetDb.GetInt(r, "ItemCode");
                     string stockAfter = (plan != null && plan.ItemNewBal.ContainsKey(ic)) ? plan.ItemNewBal[ic].ToString(CultureInfo.InvariantCulture) : "?";
-                    sb.AppendLine(string.Format("  Item: {0}  qty {1} @ {2} = Rs. {3}   (stock after posting: {4})",
+                    string itemNar = JetDb.GetStr(r, "Naration");
+                    sb.AppendLine(string.Format("  Item: {0}  qty {1} @ {2} = Rs. {3}   (stock after posting: {4}){5}",
                         st.ItemName(ic), JetDb.GetDbl(r, "Tran_Qty"),
                         Helpers.FmtAmt(JetDb.GetDbl(r, "Unit_Rate")),
-                        Helpers.FmtAmt(JetDb.GetDbl(r, "Net_Value")), stockAfter));
+                        Helpers.FmtAmt(JetDb.GetDbl(r, "Net_Value")), stockAfter,
+                        itemNar.Length > 0 ? "   [" + itemNar + "]" : ""));
                 }
             }
             if (plan != null && v.Rows("PayHist").Count > 0)
