@@ -236,7 +236,7 @@ namespace AccuVisionRepost.Core
                 "--item", "NON_EXISTENT_ITEM_XYZ",
                 "--json-out", unkErrJson
             });
-            Check(rc == 3 && File.ReadAllText(unkErrJson).Contains("was not found in Item master"),
+            Check(rc == 3 && File.ReadAllText(unkErrJson).Contains("does not exist in the Item master"),
                 "CLI unknown item rejected with exit code 3");
 
             // 4e. Unbalanced JV ledger rejection
