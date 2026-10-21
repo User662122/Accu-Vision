@@ -27,12 +27,12 @@ set CSC=%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe
 if not exist "%CSC%" (
   echo ERROR: csc.exe not found at %CSC%
   echo Install .NET Framework 4.8 Developer Pack or Visual Studio Build Tools, then run this file again.
-  pause
+  if /I not "%~1"=="--nopause" if not defined CI pause
   exit /b 1
 )
 
 echo Building with %CSC% ...
-"%CSC%" /nologo /target:winexe /platform:x86 /optimize+ ^
+"%CSC%" /nologo /target:exe /platform:x86 /optimize+ ^
   /out:"%OUT%\AccuVisionRepost.exe" ^
   /r:System.dll /r:System.Core.dll /r:System.Data.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:Microsoft.CSharp.dll ^
   "%SRC%\Program.cs" ^
@@ -42,6 +42,9 @@ echo Building with %CSC% ...
   "%SRC%\Core\Voucher.cs" ^
   "%SRC%\Core\Helpers.cs" ^
   "%SRC%\Core\CloneEngine.cs" ^
+  "%SRC%\Core\HeadlessSpec.cs" ^
+  "%SRC%\Core\HeadlessEngine.cs" ^
+  "%SRC%\Core\HeadlessCli.cs" ^
   "%SRC%\Core\SelfTest.cs" ^
   "%SRC%\Ui\MainForm.cs" ^
   "%SRC%\Ui\LookupDialog.cs"
@@ -49,7 +52,7 @@ echo Building with %CSC% ...
 if not %ERRORLEVEL%==0 (
   echo.
   echo BUILD FAILED - see the errors above.
-  pause
+  if /I not "%~1"=="--nopause" if not defined CI pause
   exit /b 1
 )
 copy /Y "%SRC%\App.config" "%OUT%\AccuVisionRepost.exe.config" >nul
@@ -62,4 +65,4 @@ echo Optional check of the posting engine (creates a scratch test database in %%
 echo   "%OUT%\AccuVisionRepost.exe" /selftest %%TEMP%%
 echo It must print: SELFTEST PASSED
 echo.
-pause
+if /I not "%~1"=="--nopause" if not defined CI pause

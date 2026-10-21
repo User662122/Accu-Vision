@@ -126,3 +126,13 @@ thing back.
 Empty strings become `Null` on write (Jet `AllowZeroLength` + app
 behaviour), except the proven `PTL.Remark1/Remark2/chno/ID_NO1` which the
 manual session shows stored as `""`. Narrations are never trimmed.
+
+## Headless architecture (`HeadlessSpec`, `HeadlessEngine`, `HeadlessCli`, `MainForm.HeadlessMode`)
+
+1. **Console + GUI single binary (`<OutputType>Exe</OutputType>`)**:
+   - When invoked with CLI arguments (`probe`, `search`, `inspect`, `review`, `post`, `batch-review`, `batch-post`, `/selftest`, `/uitest`), `Program.Main` runs `HeadlessCli.Run(args)` directly on standard `stdout`/`stderr` so `cmd.exe`, PowerShell, SSH, Python `subprocess`, and VBA `WScript.Shell.Run(..., bWaitOnReturn:=True)` wait synchronously and receive the exact exit code and redirected output streams.
+   - When launched with no arguments (or `/gui`), `Program.Main` hides the console window via `ShowWindow(GetConsoleWindow(), SW_HIDE)` and opens `MainForm`.
+2. **Pre-post live database checks in `BuildReviewPlan` & `ValidateForPost`**:
+   - Both `review` (dry-run) and `post` check `PTH` for duplicate/blank `TAX_INV_NO`, check `BillHist` for missing or over-adjusted bills on `PayHist` rows, and verify `AccNew.exe` process status so headless dry-runs catch every error that would block a live post.
+3. **Headless WinForms mode (`MainForm.HeadlessMode = true`)**:
+   - All `MessageBox.Show` and modal picker calls in `MainForm` and `LookupDialog` are routed through non-blocking helpers that log to `HeadlessMessages`/`HeadlessErrors` and auto-confirm prompts, allowing the full WinForms UI to be driven and tested headlessly (`/uitest`).

@@ -821,6 +821,17 @@ namespace AccuVisionRepost.Core
                     if (v.TaxInvMode == 2) plan.NewTaxInvNo = (v.NewTaxInvNo ?? "").Trim();
                     else if (v.TaxInvMode == 1) plan.NewTaxInvNo = Helpers.TaxInvKeepOffset(srcInv, Helpers.VchNoToLong(v.SrcVchNo), vchNum);
                     else plan.NewTaxInvNo = Helpers.TaxInvSameAsVch(srcInv, vchNum);
+
+                    if ((plan.NewTaxInvNo ?? "").Length == 0)
+                    {
+                        plan.LiveDbErrors.Add("TAX Invoice No came out blank. Type or pass a TAX Invoice No.");
+                    }
+                    else if (Jet.TableExists("PTH"))
+                    {
+                        object dup = Jet.Scalar(cn, null, "SELECT Count(*) FROM [PTH] WHERE [BT]='SL' AND [TAX_INV_NO]=?", plan.NewTaxInvNo);
+                        if (Convert.ToInt64(dup) > 0)
+                            plan.LiveDbErrors.Add("TAX Invoice No '" + plan.NewTaxInvNo + "' already exists in this database. Change it (TAX Inv mode = Manual).");
+                    }
                 }
 
                 foreach (KeyValuePair<string, DataTable> kv in v.Tables)
@@ -854,7 +865,11 @@ namespace AccuVisionRepost.Core
                 if (v.Rows("PayHist").Count > 0)
                 {
                     string err = CheckBillAdjustments(cn, null, v, plan.BillAdjustments);
-                    if (err != null) plan.Notes.Add("BILL ADJUSTMENT WARNING: " + err);
+                    if (err != null)
+                    {
+                        plan.LiveDbErrors.Add(err);
+                        plan.Notes.Add("BILL ADJUSTMENT WARNING: " + err);
+                    }
                 }
                 return plan;
             }
@@ -1114,7 +1129,8 @@ namespace AccuVisionRepost.Core
         {
             string dbDir = Path.GetDirectoryName(Jet.DbPath);
             string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            string fileName = Path.GetFileNameWithoutExtension(Jet.DbPath) + "_BACKUP_" + stamp + Path.GetExtension(Jet.DbPath);
+            string baseName = Path.GetFileNameWithoutExtension(Jet.DbPath) + "_BACKUP_" + stamp;
+            string ext = Path.GetExtension(Jet.DbPath);
             string[] dirs = new string[]
             {
                 Path.Combine(dbDir, "AccuVision_Backups"),
@@ -1126,7 +1142,13 @@ namespace AccuVisionRepost.Core
                 try
                 {
                     Directory.CreateDirectory(dir);
-                    string dest = Path.Combine(dir, fileName);
+                    string dest = Path.Combine(dir, baseName + ext);
+                    int suffix = 1;
+                    while (File.Exists(dest))
+                    {
+                        dest = Path.Combine(dir, baseName + "_" + suffix + ext);
+                        suffix++;
+                    }
                     File.Copy(Jet.DbPath, dest, false);
                     FileInfo a = new FileInfo(Jet.DbPath);
                     FileInfo b = new FileInfo(dest);
@@ -1140,13 +1162,18 @@ namespace AccuVisionRepost.Core
 
         public PostResult Post(LoadedVoucher v, bool makeBackup)
         {
+            return Post(v, makeBackup, false);
+        }
+
+        public PostResult Post(LoadedVoucher v, bool makeBackup, bool ignoreAccNewRunning)
+        {
             _db.Probe(); // freshest account/hierarchy maps before anything is computed
             List<string> errors = new List<string>(), warnings = new List<string>();
             Validate(v, errors, warnings);
             if (errors.Count > 0)
                 throw new InvalidOperationException("Please correct these first:\r\n- " + string.Join("\r\n- ", errors.ToArray()));
 
-            if (IsAccNewRunning())
+            if (!ignoreAccNewRunning && IsAccNewRunning())
                 throw new InvalidOperationException("AccNew.exe is running. Close AccNew completely before posting, otherwise AccNew can overwrite the voucher counters when it exits.");
 
             string backup = makeBackup ? MakeBackup() : "";
@@ -1359,7 +1386,14 @@ namespace AccuVisionRepost.Core
             {
                 string dir = Path.Combine(Path.GetDirectoryName(Jet.DbPath), "AccuVision_Backups");
                 Directory.CreateDirectory(dir);
-                string p = Path.Combine(dir, "PostLog_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+                string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string p = Path.Combine(dir, "PostLog_" + stamp + ".txt");
+                int suffix = 1;
+                while (File.Exists(p))
+                {
+                    p = Path.Combine(dir, "PostLog_" + stamp + "_" + suffix + ".txt");
+                    suffix++;
+                }
                 File.WriteAllText(p, text);
                 return p;
             }

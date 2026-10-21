@@ -52,8 +52,15 @@ namespace AccuVisionRepost.Ui
         private Dictionary<DataRow, string> _srcLineNarrations = new Dictionary<DataRow, string>();
         private Dictionary<DataRow, string> _lastAutoLineNarrations = new Dictionary<DataRow, string>();
 
+        public bool HeadlessMode { get; set; }
+        public List<string> HeadlessMessages { get; private set; }
+        public List<string> HeadlessErrors { get; private set; }
+        public PostResult LastPostResult { get; private set; }
+
         public MainForm()
         {
+            HeadlessMessages = new List<string>();
+            HeadlessErrors = new List<string>();
             Text = "AccuVisionRepost - AccNew Voucher Clone & Re-Post (Sales Multi Line / Bank / Journal)";
             Width = 1240; Height = 860;
             MinimumSize = new Size(980, 640);
@@ -61,6 +68,41 @@ namespace AccuVisionRepost.Ui
             Font = new Font("Segoe UI", 9f);
             BuildUi();
             LoadSettings();
+        }
+
+        public void RecordHeadlessMessage(string title, string text, MessageBoxIcon icon)
+        {
+            string clean = "[" + (title ?? "") + "] " + (text ?? "").Replace("\r\n", " | ").Replace("\n", " | ");
+            HeadlessMessages.Add(clean);
+            if (icon == MessageBoxIcon.Error || icon == MessageBoxIcon.Warning)
+            {
+                HeadlessErrors.Add(clean);
+                Console.Error.WriteLine("UI " + (icon == MessageBoxIcon.Error ? "ERROR" : "WARNING") + " " + clean);
+            }
+            else
+            {
+                Console.WriteLine("UI INFO " + clean);
+            }
+        }
+
+        private void ShowMsg(string text, string title, MessageBoxIcon icon)
+        {
+            if (HeadlessMode)
+            {
+                RecordHeadlessMessage(title, text, icon);
+                return;
+            }
+            MessageBox.Show(this, text, title, MessageBoxButtons.OK, icon);
+        }
+
+        private DialogResult ConfirmMsg(string text, string title)
+        {
+            if (HeadlessMode)
+            {
+                RecordHeadlessMessage(title, "Auto-confirmed: " + text, MessageBoxIcon.Question);
+                return DialogResult.Yes;
+            }
+            return MessageBox.Show(this, text, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         }
 
         // ================================================================ layout
@@ -522,7 +564,7 @@ namespace AccuVisionRepost.Ui
                 ScanDb(d.SelectedPath, 0, found);
                 if (found.Count == 0)
                 {
-                    MessageBox.Show(this, "No Accurate.Mdb found under that folder.", "Find database", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    ShowMsg("No Accurate.Mdb found under that folder.", "Find database", MessageBoxIcon.Information);
                     return;
                 }
                 string picked = PickFromList("Company databases found", found);
@@ -544,6 +586,10 @@ namespace AccuVisionRepost.Ui
 
         private string PickFromList(string title, List<string> items)
         {
+            if (HeadlessMode)
+            {
+                return (items != null && items.Count > 0) ? items[0] : null;
+            }
             using (Form f = new Form())
             {
                 f.Text = title; f.Width = 820; f.Height = 420; f.StartPosition = FormStartPosition.CenterParent;
@@ -563,7 +609,7 @@ namespace AccuVisionRepost.Ui
             string path = _dbPath.Text.Trim();
             if (path.Length == 0 || !File.Exists(path))
             {
-                MessageBox.Show(this, "First choose the Accurate.Mdb file.", "Connect", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowMsg("First choose the Accurate.Mdb file.", "Connect", MessageBoxIcon.Information);
                 return;
             }
             try
@@ -578,15 +624,15 @@ namespace AccuVisionRepost.Ui
                 FillBookCombo();
                 UpdateStatus();
                 SaveSettings();
-                MessageBox.Show(this, "Connected to:\r\n" + p.CompanyName + "\r\nFinancial year " + Helpers.FmtDate(p.FyFrom) + " to " + Helpers.FmtDate(p.FyTo),
-                    "Connected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowMsg("Connected to:\r\n" + p.CompanyName + "\r\nFinancial year " + Helpers.FmtDate(p.FyFrom) + " to " + Helpers.FmtDate(p.FyTo),
+                    "Connected", MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 _db = null; _engine = null;
-                MessageBox.Show(this, "Could not open the database:\r\n\r\n" + ex.Message +
+                ShowMsg("Could not open the database:\r\n\r\n" + ex.Message +
                     "\r\n\r\nCheck: (1) path is correct, (2) Password is honda757acc, (3) this is a 32-bit process (exe must be x86), (4) the file is not open exclusively elsewhere.",
-                    "Connect failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    "Connect failed", MessageBoxIcon.Error);
             }
             finally { Cursor = Cursors.Default; }
         }
@@ -633,7 +679,7 @@ namespace AccuVisionRepost.Ui
 
         private void DoSearch()
         {
-            if (_engine == null) { MessageBox.Show(this, "Connect to the database first.", "Search", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+            if (_engine == null) { ShowMsg("Connect to the database first.", "Search", MessageBoxIcon.Information); return; }
             try
             {
                 Cursor = Cursors.WaitCursor;
@@ -646,7 +692,7 @@ namespace AccuVisionRepost.Ui
                     _resultsGrid.Rows[i].Tag = s;
                 }
                 if (_results.Count == 0)
-                    MessageBox.Show(this, "No previous entries match. Check the period, book and search text.", "Search", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    ShowMsg("No previous entries match. Check the period, book and search text.", "Search", MessageBoxIcon.Information);
             }
             catch (Exception ex) { ShowError(ex); }
             finally { Cursor = Cursors.Default; }
@@ -667,10 +713,10 @@ namespace AccuVisionRepost.Ui
                 LoadVoucherIntoUi();
                 _tabs.SelectedTab = _tabEdit;
                 if (v.UnsupportedExtras.Count > 0)
-                    MessageBox.Show(this,
+                    ShowMsg(
                         "This source entry also has rows in table(s) this version does not clone: " + string.Join(", ", v.UnsupportedExtras.ToArray()) +
                         "\r\nYou can view it, but POSTING is blocked so nothing is silently left behind. Pick another entry, or get this table added (see docs/BANK-NOTES.md - First-run verification).",
-                        "Extra linked data", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        "Extra linked data", MessageBoxIcon.Warning);
             }
             catch (Exception ex) { ShowError(ex); }
             finally { Cursor = Cursors.Default; }
@@ -1251,6 +1297,8 @@ namespace AccuVisionRepost.Ui
 
                 List<string> errors = new List<string>(), warnings = new List<string>();
                 _engine.Validate(_v, errors, warnings);
+                foreach (string le in plan.LiveDbErrors)
+                    if (!errors.Contains(le)) errors.Add(le);
                 _postBtn.Tag = errors;
 
                 System.Text.StringBuilder sb = new System.Text.StringBuilder();
@@ -1347,24 +1395,26 @@ namespace AccuVisionRepost.Ui
         private void DoPost()
         {
             if (_v == null) return;
-            DialogResult ask = MessageBox.Show(this,
+            DialogResult ask = ConfirmMsg(
                 "Post this NEW entry into the LIVE database?\r\n\r\n" + _dbPath.Text +
                 "\r\n\r\nA backup will be taken first" + (_backupChk.Checked ? "." : " - NO, backup is OFF!") +
                 "\r\nThe source entry is not changed or deleted.",
-                "Confirm posting", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                "Confirm posting");
             if (ask != DialogResult.Yes) return;
             try
             {
                 Cursor = Cursors.WaitCursor;
                 SyncAllGrids(); SyncHeader();
+                VoucherKind postedKind = _v.Kind;
                 PostResult res = _engine.Post(_v, _backupChk.Checked);
+                LastPostResult = res;
                 _reviewTxt.Text = res.Report + "\r\nLog file: " + res.LogPath +
                     "\r\n\r\nNow open AccNew and check this voucher: Transaction > modify/find Vch No " + res.Plan.NewVchNo.Trim() + ".";
-                MessageBox.Show(this,
+                ShowMsg(
                     "Posted OK!\r\n\r\nNew Vch No: " + res.Plan.NewVchNo.Trim() + "\r\nID_NO: " + res.Plan.NewIDNo +
-                    (_v.Kind == VoucherKind.Sales ? "\r\nTAX Invoice No: " + res.Plan.NewTaxInvNo : "") +
+                    (postedKind == VoucherKind.Sales ? "\r\nTAX Invoice No: " + res.Plan.NewTaxInvNo : "") +
                     "\r\n\r\nOpen AccNew and verify this voucher. The backup taken before posting is at:\r\n" + res.BackupPath,
-                    "Posted", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    "Posted", MessageBoxIcon.Information);
                 _confirmChk.Checked = false;
                 _postBtn.Tag = null;
                 _postBtn.Enabled = false;
@@ -1375,8 +1425,8 @@ namespace AccuVisionRepost.Ui
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "POSTING FAILED - nothing was written to the database.\r\n\r\n" + ex.Message,
-                    "Posting failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowMsg("POSTING FAILED - nothing was written to the database.\r\n\r\n" + ex.Message,
+                    "Posting failed", MessageBoxIcon.Error);
                 UpdateStatus();
             }
             finally { Cursor = Cursors.Default; }
@@ -1384,7 +1434,98 @@ namespace AccuVisionRepost.Ui
 
         private void ShowError(Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowMsg(ex.Message, "Error", MessageBoxIcon.Error);
+        }
+
+        // ================================================================ headless UI automation API
+
+        public bool IsConnected { get { return _db != null && _engine != null; } }
+        public int SearchResultCount { get { return _results == null ? 0 : _results.Count; } }
+        public LoadedVoucher CurrentVoucher { get { return _v; } }
+        public string CurrentReviewText { get { return _reviewTxt.Text; } }
+        public bool IsPostButtonEnabled { get { return _postBtn.Enabled; } }
+        public List<string> CurrentValidationErrors
+        {
+            get
+            {
+                List<string> errs = _postBtn.Tag as List<string>;
+                return errs == null ? new List<string>() : new List<string>(errs);
+            }
+        }
+
+        public bool HeadlessConnect(string dbPath, string password, string userId)
+        {
+            _dbPath.Text = dbPath ?? "";
+            if (password != null) _pwd.Text = password;
+            if (userId != null) _userId.Text = userId;
+            ConnectDb();
+            return IsConnected;
+        }
+
+        public int HeadlessSearch(int kindIndex, string searchText, DateTime? fromDate, DateTime? toDate)
+        {
+            if (kindIndex >= 0 && kindIndex < _kindCombo.Items.Count)
+                _kindCombo.SelectedIndex = kindIndex;
+            if (fromDate.HasValue) _fromDtp.Value = fromDate.Value;
+            if (toDate.HasValue) _toDtp.Value = toDate.Value;
+            _searchTxt.Text = searchText ?? "";
+            DoSearch();
+            return SearchResultCount;
+        }
+
+        public bool HeadlessSelectAndLoad(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= _resultsGrid.Rows.Count) return false;
+            _resultsGrid.ClearSelection();
+            _resultsGrid.Rows[rowIndex].Selected = true;
+            LoadSelected();
+            return _v != null;
+        }
+
+        public void HeadlessSetNewDate(DateTime dt)
+        {
+            _newDateDtp.Value = dt.Date;
+            OnNewDateChanged();
+        }
+
+        public void HeadlessSetPartyCode(string code)
+        {
+            _partyCodeTxt.Text = code ?? "";
+            PartyCodeEdited();
+        }
+
+        public void HeadlessSetTaxInvManual(string taxInvNo)
+        {
+            _taxInvModeCombo.SelectedIndex = 2;
+            _taxInvTxt.Text = taxInvNo ?? "";
+            SyncHeader();
+        }
+
+        public void HeadlessSetItemRate(int rowIndex, double rate)
+        {
+            if (rowIndex < 0 || rowIndex >= _itemGrid.Rows.Count) return;
+            _itemGrid.Rows[rowIndex].Cells[6].Value = Helpers.FmtNumRaw(rate);
+            ItemCellEdited(rowIndex, 6);
+        }
+
+        public void HeadlessOpenReview()
+        {
+            _tabs.SelectedTab = _tabReview;
+            RefreshReview();
+        }
+
+        public void HeadlessSetConfirm(bool confirm, bool makeBackup)
+        {
+            _backupChk.Checked = makeBackup;
+            _confirmChk.Checked = confirm;
+            UpdatePostEnabled();
+        }
+
+        public PostResult HeadlessClickPost()
+        {
+            LastPostResult = null;
+            DoPost();
+            return LastPostResult;
         }
 
         // ================================================================ settings

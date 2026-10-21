@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.OleDb;
 using System.IO;
+using System.Text;
+using AccuVisionRepost.Ui;
 
 namespace AccuVisionRepost.Core
 {
@@ -96,6 +98,13 @@ namespace AccuVisionRepost.Core
                 Check(cbVerify.Rows("EFFLine").Count == 1, "CB cheque line cloned");
                 Check(JetDb.IsNull(cbVerify.Rows("EFFLine")[0], "BankDate"), "CB new cheque is un-reconciled (BankDate cleared)");
 
+                // ---------- Headless CLI: probe, search, inspect, review, error paths, post, batch-review & batch-post
+                RunHeadlessCliTests(workDir, db);
+
+                // ---------- Headless WinForms UI: MainForm driven with HeadlessMode=true (zero modal popups)
+                int uiRc = RunUiTestOnDb(workDir, db);
+                Check(uiRc == 0, "Headless WinForms MainForm UI test passed");
+
                 Console.WriteLine("SELFTEST PASSED");
                 return 0;
             }
@@ -104,6 +113,255 @@ namespace AccuVisionRepost.Core
                 Console.WriteLine("SELFTEST FAILED: " + ex);
                 return 1;
             }
+        }
+
+        public static int RunUiTest(string workDir)
+        {
+            try
+            {
+                Directory.CreateDirectory(workDir);
+                string db = Path.Combine(workDir, "Accurate_UiTest.Mdb");
+                if (File.Exists(db)) File.Delete(db);
+                CreateMdb(db);
+                JetDb jet = new JetDb(db, "");
+                using (OleDbConnection cn = jet.Open(false))
+                {
+                    CreateTables(jet, cn);
+                    Seed(jet, cn);
+                }
+                int rc = RunUiTestOnDb(workDir, db);
+                if (rc == 0) Console.WriteLine("UITEST PASSED");
+                return rc;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("UITEST FAILED: " + ex);
+                return 1;
+            }
+        }
+
+        private static void RunHeadlessCliTests(string workDir, string db)
+        {
+            Console.WriteLine("--- Headless CLI & Error Reporting Self-Tests ---");
+
+            // 1. Probe with JSON + status file
+            string probeJson = Path.Combine(workDir, "probe_out.json");
+            string probeStatus = Path.Combine(workDir, "probe_status.txt");
+            int rc = HeadlessCli.Run(new string[] { "probe", "--db", db, "--pwd", "", "--accounts", "--items", "--addons", "--json-out", probeJson, "--status-file", probeStatus });
+            Check(rc == 0, "CLI probe exit code 0");
+            Check(File.Exists(probeJson) && File.ReadAllText(probeJson).Contains("SELFTEST CO"), "CLI probe JSON output written");
+            Check(File.Exists(probeStatus) && File.ReadAllText(probeStatus).Contains("STATUS=OK"), "CLI probe status file STATUS=OK");
+
+            // 2. Search with TSV + JSON output
+            string searchTsv = Path.Combine(workDir, "search_sl.tsv");
+            string searchJson = Path.Combine(workDir, "search_sl.json");
+            rc = HeadlessCli.Run(new string[] { "search", "--db", db, "--pwd", "", "--bt", "SL", "--format", "tsv", "--out", searchTsv, "--json-out", searchJson });
+            Check(rc == 0, "CLI search SL exit code 0");
+            List<string[]> tsvRows = TabularIo.ReadFile(searchTsv, '\t');
+            Check(tsvRows.Count == 3, "CLI search SL found 2 bills (+ header = 3 TSV rows), got " + tsvRows.Count);
+
+            // 3. Inspect + export JSON spec + round-trip review from spec
+            string specJson = Path.Combine(workDir, "spec_102.json");
+            rc = HeadlessCli.Run(new string[] { "inspect", "--db", db, "--pwd", "", "--uid", "102", "--export", specJson });
+            Check(rc == 0 && File.Exists(specJson), "CLI inspect --uid 102 exported JSON spec");
+
+            string revStatus = Path.Combine(workDir, "rev_status.txt");
+            string revJson = Path.Combine(workDir, "rev_out.json");
+            rc = HeadlessCli.Run(new string[]
+            {
+                "review", "--db", db, "--pwd", "",
+                "--spec", specJson,
+                "--new-date", "2026-06-10",
+                "--rate", "300",
+                "--replace-narration", "residence=commercial office",
+                "--status-file", revStatus,
+                "--json-out", revJson
+            });
+            Check(rc == 0, "CLI review from exported spec exit code 0");
+            string revJsonText = File.ReadAllText(revJson);
+            Check(revJsonText.Contains("\"netAmt\": 354") && revJsonText.Contains("commercial office"), "CLI review recomputed Net=354 (300 + 27 SGST + 27 CGST) and replaced narration");
+
+            // 4. Error path tests ("with errors and everything"):
+            // 4a. Duplicate TAX_INV_NO caught in headless review (before posting!)
+            string dupInvStatus = Path.Combine(workDir, "err_dupinv_status.txt");
+            string dupInvJson = Path.Combine(workDir, "err_dupinv.json");
+            rc = HeadlessCli.Run(new string[]
+            {
+                "review", "--db", db, "--pwd", "",
+                "--uid", "102", "--new-date", "2026-06-10",
+                "--tax-inv-no", "134",
+                "--status-file", dupInvStatus,
+                "--json-out", dupInvJson
+            });
+            Check(rc == 3, "CLI review duplicate TAX_INV_NO returns exit code 3, got " + rc);
+            Check(File.ReadAllText(dupInvStatus).Contains("STATUS=ERROR") && File.ReadAllText(dupInvStatus).Contains("already exists"),
+                "CLI duplicate TAX_INV_NO recorded in status file");
+            Check(File.ReadAllText(dupInvJson).Contains("\"ok\": false") && File.ReadAllText(dupInvJson).Contains("TAX_INV_NO '134' already exists"),
+                "CLI duplicate TAX_INV_NO recorded in JSON errors[]");
+
+            // 4b. Out-of-financial-year date error
+            string fyErrJson = Path.Combine(workDir, "err_fy.json");
+            rc = HeadlessCli.Run(new string[]
+            {
+                "review", "--db", db, "--pwd", "",
+                "--uid", "102", "--new-date", "2028-01-15",
+                "--json-out", fyErrJson
+            });
+            Check(rc == 3 && File.ReadAllText(fyErrJson).Contains("outside the company financial year"),
+                "CLI out-of-FY date rejected with exit code 3 and detailed error");
+
+            // 4c. Group account rejection
+            string grpErrJson = Path.Combine(workDir, "err_grp.json");
+            rc = HeadlessCli.Run(new string[]
+            {
+                "review", "--db", db, "--pwd", "",
+                "--uid", "102", "--new-date", "2026-06-10",
+                "--party", "A000000001",
+                "--json-out", grpErrJson
+            });
+            Check(rc == 3 && File.ReadAllText(grpErrJson).Contains("GROUP account"),
+                "CLI group account party rejected with exit code 3");
+
+            // 4d. Unknown account/item rejection
+            string unkErrJson = Path.Combine(workDir, "err_unk.json");
+            rc = HeadlessCli.Run(new string[]
+            {
+                "review", "--db", db, "--pwd", "",
+                "--uid", "102", "--new-date", "2026-06-10",
+                "--item", "NON_EXISTENT_ITEM_XYZ",
+                "--json-out", unkErrJson
+            });
+            Check(rc == 3 && File.ReadAllText(unkErrJson).Contains("was not found in Item master"),
+                "CLI unknown item rejected with exit code 3");
+
+            // 4e. Unbalanced JV ledger rejection
+            string unbalErrJson = Path.Combine(workDir, "err_unbal.json");
+            rc = HeadlessCli.Run(new string[]
+            {
+                "review", "--db", db, "--pwd", "",
+                "--uid", "101", "--new-date", "2026-06-10",
+                "--set-eff", "1:amt=1500",
+                "--json-out", unbalErrJson
+            });
+            Check(rc == 3 && File.ReadAllText(unbalErrJson).Contains("Debits (1500.00) do not equal Credits (999.00)"),
+                "CLI unbalanced JV rejected with exit code 3");
+
+            // 4f. Warning vs --strict mode (Sales item 14 has negative stock -144 -> warning)
+            rc = HeadlessCli.Run(new string[]
+            {
+                "review", "--db", db, "--pwd", "",
+                "--uid", "102", "--new-date", "2026-06-10", "--strict"
+            });
+            Check(rc == 3, "CLI --strict turns negative stock warning into exit code 3");
+
+            // 4g. Bad CLI option -> exit code 2
+            rc = HeadlessCli.Run(new string[] { "review", "--db", db, "--no-such-flag" });
+            Check(rc == 2, "CLI unknown flag returns exit code 2, got " + rc);
+
+            // 4h. Missing DB file -> exit code 1
+            rc = HeadlessCli.Run(new string[] { "probe", "--db", Path.Combine(workDir, "missing_db_12345.Mdb") });
+            Check(rc == 1, "CLI missing DB returns exit code 1, got " + rc);
+
+            // 5. Single headless post via CLI
+            string postStatus = Path.Combine(workDir, "post_sl_status.txt");
+            string postJson = Path.Combine(workDir, "post_sl.json");
+            rc = HeadlessCli.Run(new string[]
+            {
+                "post", "--db", db, "--pwd", "",
+                "--bt", "SL", "--vch", "132",
+                "--new-date", "2026-06-15",
+                "--rate", "250",
+                "--user", "CLI",
+                "--ignore-accnew-running",
+                "--status-file", postStatus,
+                "--json-out", postJson
+            });
+            Check(rc == 0, "CLI single post SL exit code 0");
+            string postStatusText = File.ReadAllText(postStatus);
+            Check(postStatusText.Contains("STATUS=OK") && postStatusText.Contains("NEW_VCH=134"),
+                "CLI single post SL allocated NewVchNo 134: " + postStatusText);
+
+            // 6. Batch review -> TSV export -> edit TSV (Select=N on one row, Rate=400 on second) -> batch-post
+            string batchTsv = Path.Combine(workDir, "batch_review.tsv");
+            rc = HeadlessCli.Run(new string[]
+            {
+                "batch-review", "--db", db, "--pwd", "",
+                "--bt", "SL",
+                "--new-date", "2026-07-01",
+                "--export-batch", batchTsv
+            });
+            Check(rc == 0 && File.Exists(batchTsv), "CLI batch-review exported TSV");
+            List<string[]> bRows = TabularIo.ReadFile(batchTsv, '\t');
+            Check(bRows.Count == 4, "Batch TSV has header + 3 SL bills = 4 rows, got " + bRows.Count);
+
+            // Find column indices in batch TSV
+            Dictionary<string, int> colIdx = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int c = 0; c < bRows[0].Length; c++) colIdx[bRows[0][c]] = c;
+            // Skip row 1 & row 2, select only row 3 and set its Rate to 400
+            bRows[1][colIdx["Select"]] = "N";
+            bRows[2][colIdx["Select"]] = "N";
+            bRows[3][colIdx["Select"]] = "Y";
+            bRows[3][colIdx["Rate"]] = "400";
+            TabularIo.WriteFile(batchTsv, new List<string>(bRows[0]).ToArray(), bRows.GetRange(1, bRows.Count - 1), '\t');
+
+            string postedBatchTsv = Path.Combine(workDir, "batch_posted.tsv");
+            string batchStatus = Path.Combine(workDir, "batch_status.txt");
+            rc = HeadlessCli.Run(new string[]
+            {
+                "batch-post", "--db", db, "--pwd", "",
+                "--batch-file", batchTsv,
+                "--out-batch", postedBatchTsv,
+                "--status-file", batchStatus,
+                "--ignore-accnew-running"
+            });
+            Check(rc == 0, "CLI batch-post from edited TSV exit code 0");
+            string batchStatusText = File.ReadAllText(batchStatus);
+            Check(batchStatusText.Contains("SELECTED_ROWS=1") && batchStatusText.Contains("SUCCEEDED_ROWS=1") && batchStatusText.Contains("SKIPPED_ROWS=2"),
+                "CLI batch-post status counts match (1 posted, 2 skipped)");
+            List<string[]> postedRows = TabularIo.ReadFile(postedBatchTsv, '\t');
+            Check(postedRows[3][colIdx["NetAmt"]] == "472" && postedRows[3][colIdx["Status"]] == "POSTED",
+                "CLI batch-post recalculated Rate=400 -> NetAmt=472 (400 + 36 SGST + 36 CGST) and marked POSTED");
+        }
+
+        private static int RunUiTestOnDb(string workDir, string db)
+        {
+            Console.WriteLine("--- Headless WinForms MainForm UI Self-Test ---");
+            using (MainForm form = new MainForm())
+            {
+                form.HeadlessMode = true;
+                IntPtr handle = form.Handle; // force handle creation without showing a visible window
+                Check(handle != IntPtr.Zero, "MainForm handle created in headless mode");
+
+                bool connected = form.HeadlessConnect(db, "", "UITEST");
+                Check(connected, "MainForm.HeadlessConnect succeeded without modal dialog");
+
+                int count = form.HeadlessSearch(0, "", new DateTime(2026, 4, 1), new DateTime(2027, 3, 31));
+                Check(count >= 1, "MainForm.HeadlessSearch found Sales bills: " + count);
+
+                bool loaded = form.HeadlessSelectAndLoad(0);
+                Check(loaded && form.CurrentVoucher != null, "MainForm.HeadlessSelectAndLoad loaded voucher into Edit tab");
+
+                form.HeadlessSetNewDate(new DateTime(2026, 8, 5));
+                form.HeadlessSetItemRate(0, 500.0);
+
+                // Test live DB duplicate TAX_INV_NO detection inside MainForm Review tab
+                form.HeadlessSetTaxInvManual("134");
+                form.HeadlessOpenReview();
+                form.HeadlessSetConfirm(true, true);
+                Check(!form.IsPostButtonEnabled, "MainForm disables Post button when live DB has duplicate TAX_INV_NO '134'");
+                Check(form.CurrentReviewText.Contains("TAX_INV_NO '134' already exists"), "MainForm Review text displays live DB duplicate TAX_INV_NO error");
+
+                // Switch back to unique TAX_INV_NO and post headlessly through MainForm
+                form.HeadlessSetTaxInvManual("INV-UI-805");
+                form.HeadlessOpenReview();
+                form.HeadlessSetConfirm(true, true);
+                Check(form.IsPostButtonEnabled, "MainForm enables Post button once all errors are resolved");
+
+                PostResult uiPost = form.HeadlessClickPost();
+                Check(uiPost != null && uiPost.Plan != null && uiPost.Plan.NewTaxInvNo == "INV-UI-805",
+                    "MainForm.HeadlessClickPost posted new Sales bill with TAX_INV_NO 'INV-UI-805'");
+            }
+            return 0;
         }
 
         // ------------------------------------------------------------ scratch DB

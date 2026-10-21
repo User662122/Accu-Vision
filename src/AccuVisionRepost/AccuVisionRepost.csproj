@@ -6,7 +6,7 @@
     <!-- MUST be x86: Microsoft.Jet.OLEDB.4.0 is a 32-bit-only provider. -->
     <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
     <ProjectGuid>{B7E2A91C-4D3F-4E5A-9C1B-ACC0ACC00001}</ProjectGuid>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <RootNamespace>AccuVisionRepost</RootNamespace>
     <AssemblyName>AccuVisionRepost</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
@@ -46,6 +46,9 @@
     <Compile Include="Core\Voucher.cs" />
     <Compile Include="Core\Helpers.cs" />
     <Compile Include="Core\CloneEngine.cs" />
+    <Compile Include="Core\HeadlessSpec.cs" />
+    <Compile Include="Core\HeadlessEngine.cs" />
+    <Compile Include="Core\HeadlessCli.cs" />
     <Compile Include="Core\SelfTest.cs" />
     <Compile Include="Ui\MainForm.cs" />
     <Compile Include="Ui\LookupDialog.cs" />

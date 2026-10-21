@@ -144,12 +144,30 @@ namespace AccuVisionRepost.Ui
 
         public static AccountRow PickAccount(IWin32Window owner, DbProbe probe, string initial)
         {
+            MainForm mf = owner as MainForm;
+            if (mf != null && mf.HeadlessMode)
+            {
+                List<string> errs = new List<string>();
+                AccountRow resolved = HeadlessEngine.ResolveAccount(probe, initial, "Account", errs);
+                if (resolved != null) return resolved;
+                foreach (string e in errs) mf.RecordHeadlessMessage("Select Account", e, MessageBoxIcon.Warning);
+                return null;
+            }
             using (LookupDialog d = new LookupDialog(probe, false, false, initial))
                 return d.ShowDialog(owner) == DialogResult.OK ? d.PickedAccount : null;
         }
 
         public static ItemRow PickItem(IWin32Window owner, DbProbe probe, string initial)
         {
+            MainForm mf = owner as MainForm;
+            if (mf != null && mf.HeadlessMode)
+            {
+                List<string> errs = new List<string>();
+                ItemRow resolved = HeadlessEngine.ResolveItem(probe, initial, "Item", errs);
+                if (resolved != null) return resolved;
+                foreach (string e in errs) mf.RecordHeadlessMessage("Select Item", e, MessageBoxIcon.Warning);
+                return null;
+            }
             using (LookupDialog d = new LookupDialog(probe, true, false, initial))
                 return d.ShowDialog(owner) == DialogResult.OK ? d.PickedItem : null;
         }

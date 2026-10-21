@@ -167,6 +167,7 @@ namespace AccuVisionRepost.Core
         public Dictionary<int, double> ItemNewBal = new Dictionary<int, double>();
         public List<string> Notes = new List<string>();
         public List<string> BillAdjustments = new List<string>();
+        public List<string> LiveDbErrors = new List<string>();
 
         public int TotalInserts
         {

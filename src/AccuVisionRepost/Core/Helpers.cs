@@ -18,6 +18,49 @@ namespace AccuVisionRepost.Core
             return d.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture);
         }
 
+        public static string FmtDateIso(DateTime d)
+        {
+            if (d == DateTime.MinValue) return "";
+            return d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+
+        public static bool TryParseDate(string s, out DateTime result)
+        {
+            result = DateTime.MinValue;
+            if (string.IsNullOrEmpty(s)) return false;
+            string t = s.Trim();
+            if (t.Length == 0) return false;
+            if (string.Equals(t, "today", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t, "now", StringComparison.OrdinalIgnoreCase))
+            {
+                result = DateTime.Today;
+                return true;
+            }
+            string[] formats = new string[]
+            {
+                "yyyy-MM-dd", "dd-MM-yyyy", "dd/MM/yyyy", "yyyy/MM/dd",
+                "d-M-yyyy", "d/M/yyyy", "dd-MMM-yyyy", "dd MMM yyyy",
+                "yyyy-MM-dd HH:mm:ss", "dd-MM-yyyy HH:mm:ss", "dd/MM/yyyy HH:mm:ss"
+            };
+            DateTime dt;
+            if (DateTime.TryParseExact(t, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out dt))
+            {
+                result = dt.Date;
+                return true;
+            }
+            if (DateTime.TryParse(t, new CultureInfo("en-IN"), DateTimeStyles.None, out dt))
+            {
+                result = dt.Date;
+                return true;
+            }
+            if (DateTime.TryParse(t, CultureInfo.InvariantCulture, DateTimeStyles.None, out dt))
+            {
+                result = dt.Date;
+                return true;
+            }
+            return false;
+        }
+
         public static string FmtAmt(double v)
         {
             return v.ToString("#,##0.00", new CultureInfo("en-IN"));
