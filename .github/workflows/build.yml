@@ -43,7 +43,9 @@ jobs:
           if (Test-Path $marker) { Get-Content $marker }
           if ($p.ExitCode -ne 0) {
             if (Test-Path $log) {
-              Get-Content $log -Tail 30 | ForEach-Object { Write-Host ("::error ::" + ($_ -replace '%','%25')) }
+              Select-String -Path $log -Pattern 'FAIL|Exception|SelfTest assertion' |
+                Select-Object -First 10 |
+                ForEach-Object { Write-Host ("::error ::" + ($_.Line -replace '%','%25')) }
             } else {
               Write-Host "::error ::SelfTest produced no log file (exe failed to start?)"
             }

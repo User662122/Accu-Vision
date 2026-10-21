@@ -584,6 +584,26 @@ namespace AccuVisionRepost.Core
                 engine.RecalcGeneric(v, warnings);
             }
 
+            // 11b. ReplaceNarration rules (old=new) across INF, PTL, EFF (applied after line edits & recalc so EFF lines also get replaced)
+            if (spec.ReplaceNarration != null && spec.ReplaceNarration.Count > 0)
+            {
+                foreach (string pair in spec.ReplaceNarration)
+                {
+                    int eq = (pair ?? "").IndexOf('=');
+                    if (eq <= 0) continue;
+                    string fromStr = pair.Substring(0, eq);
+                    string toStr = pair.Substring(eq + 1);
+                    if (inf != null && !JetDb.IsNull(inf, "Naration"))
+                        JetDb.SetVal(inf, "Naration", JetDb.GetStr(inf, "Naration").Replace(fromStr, toStr));
+                    foreach (DataRow r in v.Rows("PTL"))
+                        if (!JetDb.IsNull(r, "Naration"))
+                            JetDb.SetVal(r, "Naration", JetDb.GetStr(r, "Naration").Replace(fromStr, toStr));
+                    foreach (DataRow r in v.Rows("EFF"))
+                        if (!JetDb.IsNull(r, "Naration"))
+                            JetDb.SetVal(r, "Naration", JetDb.GetStr(r, "Naration").Replace(fromStr, toStr));
+                }
+            }
+
             // 12. Validate
             engine.Validate(v, errors, warnings);
         }
@@ -872,8 +892,10 @@ namespace AccuVisionRepost.Core
             if (a.AddOns.HasValue) JetDb.SetVal(r, "AddOns", a.AddOns.Value);
             if (!string.IsNullOrEmpty(a.Type)) JetDb.SetVal(r, "Type", a.Type.Trim() == "-" ? "-" : "+");
             if (a.Per.HasValue) JetDb.SetVal(r, "Per", a.Per.Value);
-            if (a.AssVal.HasValue) JetDb.SetVal(r, "Ass_val", a.AssVal.Value);
-            if (a.Amount.HasValue)
+            bool isPctDerived = a.Per.HasValue && a.Per.Value > 0.0001 && a.AssVal.HasValue && a.Amount.HasValue
+                && Helpers.EqAmt(a.Amount.Value, Helpers.Round2(a.AssVal.Value * a.Per.Value / 100.0));
+            if (a.AssVal.HasValue && !isPctDerived) JetDb.SetVal(r, "Ass_val", a.AssVal.Value);
+            if (a.Amount.HasValue && !isPctDerived)
             {
                 double curPer = JetDb.GetDbl(r, "Per");
                 if (Math.Abs(a.Amount.Value) > 0.004 || Math.Abs(curPer) < 0.0001)

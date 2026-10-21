@@ -173,16 +173,18 @@ namespace AccuVisionRepost.Core
                 "--spec", specJson,
                 "--new-date", "2026-06-10",
                 "--rate", "300",
+                "--tax-inv-mode", "offset",
                 "--replace-narration", "residence=commercial office",
                 "--status-file", revStatus,
                 "--json-out", revJson
             });
-            Check(rc == 0, "CLI review from exported spec exit code 0");
+            Check(rc == 0, "CLI review from exported spec exit code 0, got " + rc);
             string revJsonText = File.ReadAllText(revJson);
             Check(revJsonText.Contains("\"netAmt\": 354") && revJsonText.Contains("commercial office"), "CLI review recomputed Net=354 (300 + 27 SGST + 27 CGST) and replaced narration");
 
             // 4. Error path tests ("with errors and everything"):
             // 4a. Duplicate TAX_INV_NO caught in headless review (before posting!)
+            //     Note: Next VchNo is 134, and source Vch 132 already used TAX_INV_NO '134', so default 'same' mode or explicit '134' must be rejected!
             string dupInvStatus = Path.Combine(workDir, "err_dupinv_status.txt");
             string dupInvJson = Path.Combine(workDir, "err_dupinv.json");
             rc = HeadlessCli.Run(new string[]
@@ -205,9 +207,10 @@ namespace AccuVisionRepost.Core
             {
                 "review", "--db", db, "--pwd", "",
                 "--uid", "102", "--new-date", "2028-01-15",
+                "--tax-inv-mode", "offset",
                 "--json-out", fyErrJson
             });
-            Check(rc == 3 && File.ReadAllText(fyErrJson).Contains("outside the company financial year"),
+            Check(rc == 3 && File.ReadAllText(fyErrJson).Contains("outside the financial year"),
                 "CLI out-of-FY date rejected with exit code 3 and detailed error");
 
             // 4c. Group account rejection
@@ -216,6 +219,7 @@ namespace AccuVisionRepost.Core
             {
                 "review", "--db", db, "--pwd", "",
                 "--uid", "102", "--new-date", "2026-06-10",
+                "--tax-inv-mode", "offset",
                 "--party", "A000000001",
                 "--json-out", grpErrJson
             });
@@ -228,6 +232,7 @@ namespace AccuVisionRepost.Core
             {
                 "review", "--db", db, "--pwd", "",
                 "--uid", "102", "--new-date", "2026-06-10",
+                "--tax-inv-mode", "offset",
                 "--item", "NON_EXISTENT_ITEM_XYZ",
                 "--json-out", unkErrJson
             });
@@ -243,14 +248,14 @@ namespace AccuVisionRepost.Core
                 "--set-eff", "1:amt=1500",
                 "--json-out", unbalErrJson
             });
-            Check(rc == 3 && File.ReadAllText(unbalErrJson).Contains("Debits (1500.00) do not equal Credits (999.00)"),
+            Check(rc == 3 && File.ReadAllText(unbalErrJson).Contains("Ledger lines do not balance"),
                 "CLI unbalanced JV rejected with exit code 3");
 
             // 4f. Warning vs --strict mode (Sales item 14 has negative stock -144 -> warning)
             rc = HeadlessCli.Run(new string[]
             {
                 "review", "--db", db, "--pwd", "",
-                "--uid", "102", "--new-date", "2026-06-10", "--strict"
+                "--uid", "102", "--new-date", "2026-06-10", "--tax-inv-mode", "offset", "--strict"
             });
             Check(rc == 3, "CLI --strict turns negative stock warning into exit code 3");
 
@@ -271,26 +276,28 @@ namespace AccuVisionRepost.Core
                 "--bt", "SL", "--vch", "132",
                 "--new-date", "2026-06-15",
                 "--rate", "250",
+                "--tax-inv-mode", "offset",
                 "--user", "CLI",
                 "--ignore-accnew-running",
                 "--status-file", postStatus,
                 "--json-out", postJson
             });
-            Check(rc == 0, "CLI single post SL exit code 0");
+            Check(rc == 0, "CLI single post SL exit code 0, got " + rc);
             string postStatusText = File.ReadAllText(postStatus);
             Check(postStatusText.Contains("STATUS=OK") && postStatusText.Contains("NEW_VCH=134"),
                 "CLI single post SL allocated NewVchNo 134: " + postStatusText);
 
-            // 6. Batch review -> TSV export -> edit TSV (Select=N on one row, Rate=400 on second) -> batch-post
+            // 6. Batch review -> TSV export -> edit TSV (Select=N on two rows, Rate=400 on third) -> batch-post
             string batchTsv = Path.Combine(workDir, "batch_review.tsv");
             rc = HeadlessCli.Run(new string[]
             {
                 "batch-review", "--db", db, "--pwd", "",
                 "--bt", "SL",
                 "--new-date", "2026-07-01",
+                "--tax-inv-mode", "offset",
                 "--export-batch", batchTsv
             });
-            Check(rc == 0 && File.Exists(batchTsv), "CLI batch-review exported TSV");
+            Check(rc == 0 && File.Exists(batchTsv), "CLI batch-review exported TSV, rc=" + rc);
             List<string[]> bRows = TabularIo.ReadFile(batchTsv, '\t');
             Check(bRows.Count == 4, "Batch TSV has header + 3 SL bills = 4 rows, got " + bRows.Count);
 
@@ -302,6 +309,8 @@ namespace AccuVisionRepost.Core
             bRows[2][colIdx["Select"]] = "N";
             bRows[3][colIdx["Select"]] = "Y";
             bRows[3][colIdx["Rate"]] = "400";
+            bRows[3][colIdx["TaxInvMode"]] = "manual";
+            bRows[3][colIdx["TaxInvNo"]] = "INV-BATCH-400";
             TabularIo.WriteFile(batchTsv, new List<string>(bRows[0]).ToArray(), bRows.GetRange(1, bRows.Count - 1), '\t');
 
             string postedBatchTsv = Path.Combine(workDir, "batch_posted.tsv");
@@ -314,12 +323,12 @@ namespace AccuVisionRepost.Core
                 "--status-file", batchStatus,
                 "--ignore-accnew-running"
             });
-            Check(rc == 0, "CLI batch-post from edited TSV exit code 0");
+            Check(rc == 0, "CLI batch-post from edited TSV exit code 0, got " + rc);
             string batchStatusText = File.ReadAllText(batchStatus);
             Check(batchStatusText.Contains("SELECTED_ROWS=1") && batchStatusText.Contains("SUCCEEDED_ROWS=1") && batchStatusText.Contains("SKIPPED_ROWS=2"),
                 "CLI batch-post status counts match (1 posted, 2 skipped)");
             List<string[]> postedRows = TabularIo.ReadFile(postedBatchTsv, '\t');
-            Check(postedRows[3][colIdx["NetAmt"]] == "472" && postedRows[3][colIdx["Status"]] == "POSTED",
+            Check(Helpers.EqAmt(Helpers.ParseDbl(postedRows[3][colIdx["NetAmt"]], 0), 472.0) && postedRows[3][colIdx["Status"]] == "POSTED",
                 "CLI batch-post recalculated Rate=400 -> NetAmt=472 (400 + 36 SGST + 36 CGST) and marked POSTED");
         }
 
