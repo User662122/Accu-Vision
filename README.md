@@ -1,5 +1,7 @@
 # AccuVisionRepost — clone & re-post AccNew vouchers
 
+[![Build AccuVisionRepost.exe](https://github.com/User662122/Accu-Vision/actions/workflows/build.yml/badge.svg?branch=arena/7e336d4d-accu-vision)](https://github.com/User662122/Accu-Vision/actions/workflows/build.yml)
+
 A small Windows desktop app that writes entries **directly into your existing
 AccNew company database** (`Accurate.Mdb`), exactly the way AccNew itself
 saves them.
@@ -141,6 +143,24 @@ posting recipes, but your live books deserve a test run:
   `AccuVisionRepost.exe /uitest %TEMP%` → must print `UITEST PASSED`.
 - Read-only database probe:
   `AccuVisionRepost.exe /probe <path-to-Accurate.Mdb> [Password]`
+
+### Continuous integration
+
+`.github/workflows/build.yml` builds the app on `windows-latest` with MSBuild
+(Release, x86 — the Jet OLEDB provider is 32-bit only) and then runs
+`AccuVisionRepost.exe /selftest <temp dir>` on a scratch database it creates
+itself. The job **fails the build** if the engine prints anything other than
+`SELFTEST PASSED`, so the green tick on the commit means:
+
+- the sources compile with no errors under the in-box toolchain, and
+- the posting engine wrote JV / SL / CB vouchers that read back exactly as the
+  self-test expects, and
+- the CLI refused each deliberately-bad voucher with exit code 3 and the
+  expected message.
+
+The self-test's verdict lines are also published as check-run annotations
+(`gh api /repos/User662122/Accu-Vision/commits/<sha>/check-runs`), so the result
+is readable without downloading the job log.
 
 ---
 

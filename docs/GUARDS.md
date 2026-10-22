@@ -21,7 +21,7 @@ tool raises carries the original AccNew text and the address it was found at, so
 traced back to the software:
 
 ```
-Ledger line 1: SUNDRY DEBTORS is a GROUP account.  [AccNew: "Group Account Not Allowed In Transaction" @ 0x56cf68]
+EFF line 1: SUNDRY DEBTORS is a GROUP account - AccNew does not allow group accounts in vouchers.  [AccNew: "Group Account Not Allowed In Transaction" @ 0x56cf68]
 ```
 
 The remaining **47 messages (80 guard points)** cannot apply to this tool, in four groups:
@@ -81,6 +81,26 @@ failure happens before any `INSERT`.
 Plus the guards that already existed in `Validate`: Auto JV, Interest JV, date inside the
 company's A/c period, at least 2 ledger lines, non-negative amounts, text length against the real
 column width, and the unsupported-table discovery block.
+
+## Verified by CI
+
+The guards are exercised by `AccuVisionRepost.exe /selftest` on a scratch database, and that
+self-test is the build gate in `.github/workflows/build.yml`. A green run therefore means the
+guard module compiles and behaves as specified:
+
+| Checked automatically | Where |
+|---|---|
+| Duplicate `TAX_INV_NO` on the live database is reported and the Post button is disabled, with the message `TAX Invoice No '134' already exists` | `SelfTest.RunUiTestOnDb` |
+| Post becomes possible again once every error is cleared | same |
+| An unbalanced journal is refused by the CLI with exit code 3 and `Ledger lines do not balance` | `SelfTest` CLI section |
+| A date outside the company's A/c period is refused with `outside the financial year` | same |
+| A group account is refused with `GROUP account`; a missing item with `does not exist in the Item master`; a bad bank/cash head with `Bank/Cash type account` | same |
+| JV / SL / CB vouchers still post and read back with the expected numbers (`VchNo` 347 / 133 / 11, `ID_NO` `0000006307`, new SL number 134) | posted-voucher assertions |
+
+Because a guard that fires too eagerly would break the posting assertions, "green CI" is a
+regression test for both directions: nothing valid is rejected and nothing invalid is written.
+
+Run: workflow `build.yml`, `windows-latest`, MSBuild Release x86 → `/selftest`.
 
 ## Proof that the new guards do not reject real entries
 
