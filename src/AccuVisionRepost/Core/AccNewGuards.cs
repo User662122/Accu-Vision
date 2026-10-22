@@ -76,6 +76,14 @@ namespace AccuVisionRepost.Core
             else if (st != null && st.Account(infAcc) == null)
                 Err(errors, "Head account " + infAcc + " does not exist in AccMst." + Tag("INF,ACCMST,Invalid Acc_Code or Record missing from AccMst,", "integrity checker"));
 
+            // ---- G04 BT / Tran_Type must exist in the TranType master
+            //   ("EFF,,Invalid BT-Tran_Type or Record missing from Tran_Type,")
+            // Without a series row AccNew cannot allocate a voucher number, so it stops
+            // here rather than posting an entry that no book will list.
+            if (st != null && st.Series.Count > 0 && st.FindSeries(bt, tt) == null)
+                Err(errors, "Book / series '" + bt + "' + '" + tt + "' does not exist in the TranType master - AccNew cannot allocate a voucher number for it."
+                    + Tag("EFF,,Invalid BT-Tran_Type or Record missing from Tran_Type,", "integrity checker"));
+
             // ---- G05 EFF line accounts exist, Acc_Code2 exists when used, no group/system account
             foreach (DataRow r in eff)
             {

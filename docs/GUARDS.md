@@ -54,6 +54,7 @@ failure happens before any `INSERT`.
 | G01 | Every row of the voucher carries the same `BT`/`Tran_Type`/`ID_NO`/`VchNo`/`VchDate` as `INF` | `INF,EFF,Not Match VCHNO,` … (14 messages) | Validate |
 | G02 | `INF.DbCr` is `D` or `C` | `INF,,dbcr - Invalid character,` | Validate |
 | G03 | Head account exists in `AccMst` | `INF,ACCMST,Invalid Acc_Code…`, `Account Not Found In Master` | Validate |
+| G04 | `BT` / `Tran_Type` exist in the `TranType` master (otherwise no voucher number can be allocated) | `EFF,,Invalid BT-Tran_Type or Record missing from Tran_Type,` | Validate |
 | G05 | Line and contra accounts exist; no **group** account; no **system** account (`Sys_Flag='Y'`) | `EFF,ACCMST,…`, `Group Account Not Allowed In Transaction` | Validate |
 | G06 | Debit total = Credit total | `Cr. And Db Not Match In EFF`, `Balance Not Equal`, `DEBIT And CREDIT Must be Equal For JV` | Validate |
 | G07 | Journal with more than 2 bank/cash lines refused | `Multi - Contra Entry . . . Can't Save` | Validate |
