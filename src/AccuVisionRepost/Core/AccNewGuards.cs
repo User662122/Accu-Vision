@@ -301,7 +301,7 @@ namespace AccuVisionRepost.Core
             if (v.Kind == VoucherKind.Sales && v.Pth != null)
             {
                 string taxCode = Str(v.Pth, "TaxCode");
-                if (taxCode.Length > 0 && jet.TableExists("TaxCode"))
+                if (taxCode.Length > 0 && jet.TableExists("TaxCode") && jet.HasColumn("TaxCode", "TaxCode"))
                 {
                     object t = jet.Scalar(cn, tx, "SELECT Count(*) FROM [TaxCode] WHERE [TaxCode]=?", taxCode);
                     if (Convert.ToInt64(t) == 0)
@@ -323,20 +323,29 @@ namespace AccuVisionRepost.Core
             }
 
             // ---- G28 duplicate cheque number  ("Duplicate Chq. No")
+            //      WARNING, not an error: re-posting a bank entry deliberately keeps the source
+            //      cheque number (a bounced / re-issued cheque is re-entered with the same number),
+            //      and AccNew raises this interactively where the operator can confirm it. The
+            //      clone must not refuse what the software itself would let through.
             if (jet.TableExists("EFFLine") && jet.HasColumn("EFFLine", "ChqNo"))
             {
                 foreach (DataRow r in v.Rows("EFFLine"))
                 {
                     string chq = Str(r, "ChqNo");
                     if (chq.Length == 0) continue;
-                    object d = jet.Scalar(cn, tx, "SELECT Count(*) FROM [EFFLine] WHERE [ChqNo]=?", chq);
-                    if (Convert.ToInt64(d) > 0)
-                        Err(errors, "Cheque No " + chq + " is already used by another voucher." + Tag("Duplicate Chq. No", "0x56db78"));
+                    DataTable dup = jet.Query(cn, tx, "SELECT [BT],[Tran_Type],[VchNo] FROM [EFFLine] WHERE [ChqNo]=?", chq);
+                    if (dup.Rows.Count > 0)
+                    {
+                        string where = Str(dup.Rows[0], "BT") + " Vch " + JetDb.GetStr(dup.Rows[0], "VchNo").Trim();
+                        Warn(warnings, "Cheque No " + chq + " already appears in this database (" + dup.Rows.Count
+                            + " line(s), e.g. " + where + "). AccNew asks for confirmation on this - check it is intended."
+                            + Tag("Duplicate Chq. No", "0x56db78"));
+                    }
                 }
             }
 
             // ---- G29 challan reference must exist ("Invalid Challan No / Line")
-            if (jet.TableExists("CHH") && v.Rows("PTL").Count > 0)
+            if (jet.TableExists("CHH") && jet.HasColumn("CHH", "CHNO") && v.Rows("PTL").Count > 0)
             {
                 foreach (DataRow r in v.Rows("PTL"))
                 {

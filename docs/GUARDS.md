@@ -72,7 +72,7 @@ failure happens before any `INSERT`.
 | G25 | Tax code exists in the `TaxCode` master | `INF,TAXCODE,Invalid TaxCode…` | Live |
 | G26 | TAX invoice number unique | `Duplicate TAX INVOICE`, `TAX Invoice No Already Exist`, `Bill No. Already exist...` | Live |
 | G27 | More than one `PTH` row → warning | `TAX Invoice No Already Exist` | Live |
-| G28 | Cheque number not already used | `Duplicate Chq. No` | Live |
+| G28 | Cheque number already used → **warning** (a re-post keeps its cheque; AccNew asks for confirmation) | `Duplicate Chq. No` | Live |
 | G29 | Challan reference exists in `CHH` | `Invalid Challan No / Line` | Live |
 | G30 | Bill exists, belongs to the same party, not over-adjusted, not dated after the voucher | `Bill Less Then Adjusted Value`, `Party Can Not Change If Bill Adjusted`, `Bill Date Must Be Less Then Payment Date` | Live |
 | G31 | The same bill is not adjusted twice in one voucher | `PAYHIST,,Duplicate Record,` | Live |

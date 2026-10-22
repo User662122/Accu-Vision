@@ -179,9 +179,14 @@ namespace AccuVisionRepost.Core
                         p.ControlNo[prog.ToUpperInvariant()] = (long)Math.Round(JetDb.GetDbl(r, "No_1"));
                 }
 
-                // Accounts
-                DataTable acc = Jet.Query(cn, null,
-                    "SELECT [Acc_code],[Name],[Op_bal],[Op_dbcr],[Db_amt],[Cr_amt],[Cl_bal],[Cl_dbcr],[Grp_flag],[Acc_type],[Sys_Flag] FROM [AccMst]");
+                // Accounts. Sys_Flag only exists in some company databases (it is absent from
+                // the self-test scratch schema and from older AccNew versions), and Jet reports a
+                // missing column as "No value given for one or more required parameters", so the
+                // column list is built from the introspected schema instead of being hard-coded.
+                bool hasSysFlag = Jet.HasColumn("AccMst", "Sys_Flag");
+                string accSelect = "SELECT [Acc_code],[Name],[Op_bal],[Op_dbcr],[Db_amt],[Cr_amt],[Cl_bal],[Cl_dbcr],[Grp_flag],[Acc_type]"
+                    + (hasSysFlag ? ",[Sys_Flag]" : "") + " FROM [AccMst]";
+                DataTable acc = Jet.Query(cn, null, accSelect);
                 foreach (DataRow r in acc.Rows)
                 {
                     AccountRow a = new AccountRow();
@@ -195,7 +200,7 @@ namespace AccuVisionRepost.Core
                     a.ClDbCr = JetDb.GetStr(r, "Cl_dbcr").Trim();
                     a.GrpFlag = JetDb.GetStr(r, "Grp_flag").Trim();
                     a.AccType = JetDb.GetStr(r, "Acc_type").Trim();
-                    a.SysFlagValue = JetDb.GetStr(r, "Sys_Flag").Trim();
+                    a.SysFlagValue = hasSysFlag ? JetDb.GetStr(r, "Sys_Flag").Trim() : "";
                     if (a.Code.Length > 0) p.Accounts[a.Code] = a;
                 }
 
