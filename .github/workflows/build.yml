@@ -55,6 +55,14 @@ jobs:
             }
             throw "SelfTest failed"
           }
+          # Surface the engine's own verdict as a check annotation so a green run is
+          # auditable through the API (the job log itself is not always reachable).
+          if (Test-Path $log) {
+            Select-String -Path $log -Pattern 'SELFTEST PASSED|PASSED|Balance|posted' |
+              Select-Object -First 6 |
+              ForEach-Object { Write-Host ("::notice ::" + ($_.Line -replace '%','%25')) }
+            Write-Host ("::notice ::selftest_log.txt: " + (Get-Content $log).Count + " lines")
+          }
 
       - name: Upload exe
         uses: actions/upload-artifact@v4
