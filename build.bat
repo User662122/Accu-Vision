@@ -42,6 +42,7 @@ echo Building with %CSC% ...
   "%SRC%\Core\Voucher.cs" ^
   "%SRC%\Core\Helpers.cs" ^
   "%SRC%\Core\CloneEngine.cs" ^
+  "%SRC%\Core\AccNewGuards.cs" ^
   "%SRC%\Core\HeadlessSpec.cs" ^
   "%SRC%\Core\HeadlessEngine.cs" ^
   "%SRC%\Core\HeadlessCli.cs" ^

@@ -46,6 +46,7 @@
     <Compile Include="Core\Voucher.cs" />
     <Compile Include="Core\Helpers.cs" />
     <Compile Include="Core\CloneEngine.cs" />
+    <Compile Include="Core\AccNewGuards.cs" />
     <Compile Include="Core\HeadlessSpec.cs" />
     <Compile Include="Core\HeadlessEngine.cs" />
     <Compile Include="Core\HeadlessCli.cs" />
