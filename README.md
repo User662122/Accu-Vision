@@ -98,6 +98,10 @@ The exe is 32-bit on purpose — the Jet (.mdb) driver is 32-bit only.
   lines numbered 1..n.
 - `docs/ENTRY-FLOW-AUDIT.md` traces the whole New Entry → Enter → Save path in the
   original software, function by function, and compares it with this tool.
+- `docs/GUARDS.md` lists all 118 entry-time error messages found in the software's
+  voucher routines, shows which 71 are enforced here (and where), and why the rest
+  cannot apply. Each message the tool refuses with quotes the original text and the
+  address it came from.
 - Every posting writes a `PostLog_*.txt` report next to the backups.
 
 **Undo:** if you ever post something wrong and notice immediately, close

@@ -134,6 +134,10 @@ This tool enforces the ones that apply to a programmatic post:
 | Multi - Contra Entry … Can't Save | `Validate` (Journal with >2 `Acc_type` 03/04 lines) |
 | Restriction (per-user permission) | not applicable — no interactive operator login |
 
+The full mapping — all 118 distinct blocking messages found in the voucher routines of
+`AccNew.exe`, which are enforced and which cannot apply — is in [`GUARDS.md`](GUARDS.md), together
+with the regression results against the live database.
+
 Two cosmetic/structural details are also matched now: `INF.UserId` is padded to the 5-character
 operator field (`Helpers.PadUser`), every non-Sales `EFF` line gets its contra account in
 `EFF.Acc_Code2` (`FillMissingContra`, existing values never overwritten), and non-Sales `EFF`

@@ -35,7 +35,9 @@ namespace AccuVisionRepost.Core
         public string ClDbCr;
         public string GrpFlag;
         public string AccType;
+        public string SysFlagValue;   // AccMst.Sys_Flag - 'Y' = system account, cannot take entries
         public bool IsGroup { get { return string.Equals((GrpFlag ?? "").Trim(), "Y", StringComparison.OrdinalIgnoreCase); } }
+        public bool SysFlag { get { return string.Equals((SysFlagValue ?? "").Trim(), "Y", StringComparison.OrdinalIgnoreCase); } }
         public string Display { get { return Code + "  " + Name; } }
         public override string ToString() { return Display; }
     }
@@ -179,7 +181,7 @@ namespace AccuVisionRepost.Core
 
                 // Accounts
                 DataTable acc = Jet.Query(cn, null,
-                    "SELECT [Acc_code],[Name],[Op_bal],[Op_dbcr],[Db_amt],[Cr_amt],[Cl_bal],[Cl_dbcr],[Grp_flag],[Acc_type] FROM [AccMst]");
+                    "SELECT [Acc_code],[Name],[Op_bal],[Op_dbcr],[Db_amt],[Cr_amt],[Cl_bal],[Cl_dbcr],[Grp_flag],[Acc_type],[Sys_Flag] FROM [AccMst]");
                 foreach (DataRow r in acc.Rows)
                 {
                     AccountRow a = new AccountRow();
@@ -193,6 +195,7 @@ namespace AccuVisionRepost.Core
                     a.ClDbCr = JetDb.GetStr(r, "Cl_dbcr").Trim();
                     a.GrpFlag = JetDb.GetStr(r, "Grp_flag").Trim();
                     a.AccType = JetDb.GetStr(r, "Acc_type").Trim();
+                    a.SysFlagValue = JetDb.GetStr(r, "Sys_Flag").Trim();
                     if (a.Code.Length > 0) p.Accounts[a.Code] = a;
                 }
 

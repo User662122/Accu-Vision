@@ -277,6 +277,15 @@ namespace AccuVisionRepost.Core
             try { return Convert.ToDouble(o); } catch { return 0.0; }
         }
 
+        public static long GetLong(DataRow r, string col)
+        {
+            string c = RealCol(r, col);
+            if (c == null) return 0;
+            object o = r[c];
+            if (o == null || o == DBNull.Value) return 0;
+            try { return Convert.ToInt64(o); } catch { return 0; }
+        }
+
         public static int GetInt(DataRow r, string col)
         {
             object o = GetRaw(r, col);

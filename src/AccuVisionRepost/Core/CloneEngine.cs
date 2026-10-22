@@ -641,25 +641,21 @@ namespace AccuVisionRepost.Core
 
             List<DataRow> eff = v.Rows("EFF");
             if (eff.Count < 2) errors.Add("At least 2 ledger (EFF) lines are required.");
+
+            // Per-line checks AccNew makes on the amount / Dr-Cr fields themselves.
+            // The account-existence, group-account, balance and identity checks live in
+            // AccNewGuards (called at the end of this method) so there is one copy of each.
             foreach (DataRow r in eff)
             {
-                string acc = JetDb.GetStr(r, "Acc_Code").Trim();
+                int line = JetDb.GetInt(r, "Line_no");
                 string dc = JetDb.GetStr(r, "DbCr").Trim().ToUpperInvariant();
                 double amt = JetDb.GetDbl(r, "Tran_amt");
-                if (acc.Length == 0) errors.Add("EFF line " + JetDb.GetInt(r, "Line_no") + ": account is blank.");
-                else
-                {
-                    AccountRow a = St.Account(acc);
-                    if (a == null) errors.Add("EFF line " + JetDb.GetInt(r, "Line_no") + ": account " + acc + " does not exist in AccMst.");
-                    else if (a.IsGroup) errors.Add("EFF line " + JetDb.GetInt(r, "Line_no") + ": " + a.Name.Trim() + " is a GROUP account - AccNew does not allow group accounts in vouchers.");
-                }
-                if (dc != "D" && dc != "C") errors.Add("EFF line " + JetDb.GetInt(r, "Line_no") + ": Dr/Cr must be D or C.");
-                if (amt < -0.004) errors.Add("EFF line " + JetDb.GetInt(r, "Line_no") + ": amount cannot be negative.");
-                if (Helpers.EqAmt(amt, 0)) warnings.Add("EFF line " + JetDb.GetInt(r, "Line_no") + " has zero amount.");
+                if (JetDb.GetStr(r, "Acc_Code").Trim().Length == 0) errors.Add("EFF line " + line + ": account is blank.");
+                if (dc != "D" && dc != "C") errors.Add("EFF line " + line + ": Dr/Cr must be D or C.");
+                if (amt < -0.004) errors.Add("EFF line " + line + ": amount cannot be negative.");
+                if (Helpers.EqAmt(amt, 0)) warnings.Add("EFF line " + line + " has zero amount.");
             }
-            double dr = v.EffTotal("D"), cr = v.EffTotal("C");
-            if (!Helpers.EqAmt(dr, cr)) errors.Add("Ledger lines do not balance: Debit " + Helpers.FmtAmt(dr) + " vs Credit " + Helpers.FmtAmt(cr) + " (difference " + Helpers.FmtAmt(Math.Abs(dr - cr)) + ").");
-            if (Helpers.EqAmt(dr, 0)) errors.Add("Voucher amount is zero.");
+            if (Helpers.EqAmt(v.EffTotal("D"), 0)) errors.Add("Voucher amount is zero.");
 
             if (v.Kind == VoucherKind.Sales)
             {
@@ -668,34 +664,13 @@ namespace AccuVisionRepost.Core
                 if (ptl.Count == 0) errors.Add("Sales bill has no item lines (PTL).");
                 foreach (DataRow r in ptl)
                 {
-                    int ic = JetDb.GetInt(r, "ItemCode");
-                    if (St.Item(ic) == null) errors.Add("Item " + ic + " does not exist in the Item master.");
                     if (JetDb.GetDbl(r, "Tran_Qty") < 0 || JetDb.GetDbl(r, "Unit_Rate") < 0)
                         errors.Add("Item line " + JetDb.GetInt(r, "Line_no") + ": qty/rate cannot be negative.");
                     if (JetDb.GetStr(r, "chno").Trim().Length > 0)
                         warnings.Add("Item line " + JetDb.GetInt(r, "Line_no") + " is linked to a challan (" + JetDb.GetStr(r, "chno").Trim() + ") - the clone will carry the same challan reference. Verify this is intended.");
                 }
-                if (v.Pth != null)
-                {
-                    double chk = Helpers.Round2(JetDb.GetDbl(v.Pth, "GoodAmt") + JetDb.GetDbl(v.Pth, "AddAmt") - JetDb.GetDbl(v.Pth, "LessAmt") - JetDb.GetDbl(v.Pth, "NetAmt"));
-                    if (!Helpers.EqAmt(chk, 0)) errors.Add("Bill totals do not add up: GoodAmt + AddAmt - LessAmt != NetAmt (off by " + Helpers.FmtAmt(chk) + "). Press Recalculate.");
-                    if (v.TaxInvMode == 2 && (v.NewTaxInvNo ?? "").Trim().Length == 0)
-                        errors.Add("TAX Invoice No is blank (manual mode).");
-                }
-            }
-
-            if (v.Kind == VoucherKind.Journal)
-            {
-                // "Multi - Contra Entry  . . . Can't Save" (0x534df4): a contra journal that
-                // moves money between more than one pair of bank/cash accounts is refused.
-                int contraLines = 0;
-                foreach (DataRow r in eff)
-                {
-                    AccountRow a = St.Account(JetDb.GetStr(r, "Acc_Code").Trim());
-                    if (a != null && (a.AccType == "03" || a.AccType == "04")) contraLines++;
-                }
-                if (contraLines > 2)
-                    errors.Add("This is a multi-contra journal (" + contraLines + " bank/cash lines). AccNew refuses to save it (\"Multi - Contra Entry . . . Can't Save\").");
+                if (v.Pth != null && v.TaxInvMode == 2 && (v.NewTaxInvNo ?? "").Trim().Length == 0)
+                    errors.Add("TAX Invoice No is blank (manual mode).");
             }
 
             if (v.Kind == VoucherKind.BankCash)
@@ -716,6 +691,10 @@ namespace AccuVisionRepost.Core
             }
 
             ValidateTextLengths(v, errors);
+
+            // Guards mirrored from AccNew's own voucher routines (see Core/AccNewGuards.cs).
+            // Each message carries the original AccNew message and the address it came from.
+            AccNewGuards.CheckVoucher(v, St, errors, warnings);
         }
 
         private void ValidateTextLengths(LoadedVoucher v, List<string> errors)
@@ -1319,6 +1298,19 @@ namespace AccuVisionRepost.Core
                     List<string> notes = new List<string>();
                     Dictionary<string, DataTable> f = PrepareFinal(v, plan, cn, tx, finalBal, itemRows, notes);
                     plan.Notes.AddRange(notes);
+
+                    // ---- guards that need the live database (duplicates, masters, bill rules).
+                    // They run NOW, on the final rows with their new numbers, and BEFORE the
+                    // first insert: if anything fails the transaction is rolled back untouched.
+                    LoadedVoucher finalView = new LoadedVoucher();
+                    finalView.Kind = v.Kind;
+                    finalView.NewDate = v.NewDate;
+                    finalView.SrcBT = v.SrcBT;
+                    finalView.Tables = f;
+                    List<string> guardErrors = new List<string>();
+                    AccNewGuards.CheckLive(finalView, St, Jet, cn, tx, guardErrors, plan.Notes);
+                    if (guardErrors.Count > 0)
+                        throw new InvalidOperationException("Please correct these first:\r\n- " + string.Join("\r\n- ", guardErrors.ToArray()));
 
                     plan.InsertCounts.Clear();
                     Action<string> insAll = delegate(string table)

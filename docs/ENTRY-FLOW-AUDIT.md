@@ -470,6 +470,13 @@ then complains.** It validates, then writes. Your `Post()` mirrors this (validat
 transaction → commit/rollback), so a failed check in either program leaves `Accurate.Mdb`
 unchanged.
 
+**These guards are now implemented** — see [`GUARDS.md`](GUARDS.md). 71 of the 118 distinct
+messages (173 of the 253 guard points) are enforced in `Core/AccNewGuards.cs`; the remaining 47
+are delete/edit guards on masters, other modules, print/search dialogs or SQL fragments, each
+listed with its reason. Every data-dependent guard was run against all 2,535 `EFF` lines, 243
+bills and 136 `PayHist` rows in the supplied database and none of them rejects a voucher AccNew
+itself created.
+
 ## Appendix A — Address map used above
 
 | Address | Role | Proven by |
