@@ -1,0 +1,72 @@
+name: Build AccuVisionRepost.exe
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build (Release, x86 - Jet OLEDB is 32-bit only)
+        shell: pwsh
+        run: |
+          & msbuild src\AccuVisionRepost\AccuVisionRepost.csproj /t:Rebuild /p:Configuration=Release /p:Platform=x86 /nologo /v:minimal 2>&1 |
+            Tee-Object -FilePath build.log
+          $code = $LASTEXITCODE
+          Write-Host "MSBuild exit code: $code"
+          if ($code -ne 0) {
+            # Surface compiler errors as check annotations (readable without raw logs)
+            Select-String -Path build.log -Pattern 'error|MSB\d+|CS\d+' |
+              Select-Object -First 40 |
+              ForEach-Object { Write-Host ("::error ::" + ($_.Line -replace '%','%25')) }
+            throw "MSBuild failed with exit code $code"
+          }
+
+      - name: Run posting-engine self-test
+        shell: pwsh
+        run: |
+          $exe = "src\AccuVisionRepost\bin\x86\Release\AccuVisionRepost.exe"
+          $work = Join-Path $env:RUNNER_TEMP "selftest"
+          New-Item -ItemType Directory -Force $work | Out-Null
+          $p = Start-Process -FilePath $exe -ArgumentList @("/selftest", $work) -Wait -PassThru -NoNewWindow
+          Write-Host "ExitCode=$($p.ExitCode)"
+          $log = Join-Path $work "selftest_log.txt"
+          if (Test-Path $log) { Get-Content $log }
+          $marker = Join-Path $work "selftest_result.txt"
+          if (Test-Path $marker) { Get-Content $marker }
+          if ($p.ExitCode -ne 0) {
+            if (Test-Path $log) {
+              Select-String -Path $log -Pattern 'FAIL|Exception|SelfTest assertion' |
+                Select-Object -First 10 |
+                ForEach-Object { Write-Host ("::error ::" + ($_.Line -replace '%','%25')) }
+            } else {
+              Write-Host "::error ::SelfTest produced no log file (exe failed to start?)"
+            }
+            throw "SelfTest failed"
+          }
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: AccuVisionRepost
+          path: |
+            src\AccuVisionRepost\bin\x86\Release\AccuVisionRepost.exe
+            src\AccuVisionRepost\bin\x86\Release\AccuVisionRepost.exe.config
+
+      - name: Upload diagnostics (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics
+          path: |
+            build.log
+            ${{ runner.temp }}\selftest\selftest_log.txt
+            ${{ runner.temp }}\selftest\selftest_result.txt
+          if-no-files-found: ignore
