@@ -67,7 +67,7 @@ namespace AccuVisionRepost.Core
             // ---- G02 INF.DbCr must be D or C  ("INF,,dbcr - Invalid character,")
             string infDc = Str(inf, "DbCr").ToUpperInvariant();
             if (infDc != "D" && infDc != "C")
-                Err(errors, "Voucher header (INF) Dr/Cr is \"" + Str(inf, "DbCr") + "\" - AccNew only writes D or C." + Tag("INF,,dbcr - Invalid character,", "integrity checker"));
+                Err(errors, "Voucher header (INF) DbCr is \"" + Str(inf, "DbCr") + "\" - AccNew only writes D or C." + Tag("INF,,dbcr - Invalid character,", "integrity checker"));
 
             // ---- G03 INF.Acc_Code must exist  ("INF,ACCMST,Invalid Acc_Code or Record missing from AccMst,")
             string infAcc = Str(inf, "Acc_Code");
@@ -87,24 +87,26 @@ namespace AccuVisionRepost.Core
                 {
                     AccountRow a = st.Account(acc);
                     if (a == null)
-                        Err(errors, "Ledger line " + line + ": account " + acc + " does not exist in AccMst." + Tag("EFF,ACCMST,Invalid Acc_Code or Record missing from AccMst,", "integrity checker"));
+                        Err(errors, "EFF line " + line + ": account " + acc + " does not exist in AccMst." + Tag("EFF,ACCMST,Invalid Acc_Code or Record missing from AccMst,", "integrity checker"));
                     else
                     {
                         if (a.IsGroup)
-                            Err(errors, "Ledger line " + line + ": " + a.Name.Trim() + " is a GROUP account." + Tag("Group Account Not Allowed In Transaction", "0x56cf68"));
+                            Err(errors, "EFF line " + line + ": " + a.Name.Trim() + " is a GROUP account - AccNew does not allow group accounts in vouchers." + Tag("Group Account Not Allowed In Transaction", "0x56cf68"));
                         if (a.SysFlag)
                             Err(errors, "Ledger line " + line + ": " + a.Name.Trim() + " is a system account (Sys_Flag = 'Y') and cannot take entries." + Tag("and sys_flag <> 'Y'", "0x4f9bb0"));
                     }
                 }
 
                 if (acc2.Length > 0 && st != null && st.Account(acc2) == null)
-                    Err(errors, "Ledger line " + line + ": contra account " + acc2 + " does not exist in AccMst." + Tag("EFF,ACCMST,Invalid Acc_Code2 or Record missing from AccMst,", "integrity checker"));
+                    Err(errors, "EFF line " + line + ": contra account " + acc2 + " does not exist in AccMst." + Tag("EFF,ACCMST,Invalid Acc_Code2 or Record missing from AccMst,", "integrity checker"));
             }
 
             // ---- G06 the two sides must agree (three messages AccNew raises for this)
             double dr = v.EffTotal("D"), cr = v.EffTotal("C");
             if (!Helpers.EqAmt(dr, cr))
-                Err(errors, "Debit " + Helpers.FmtAmt(dr) + " and Credit " + Helpers.FmtAmt(cr) + " do not match (difference " + Helpers.FmtAmt(Math.Abs(dr - cr)) + ")." + Tag("Cr. And Db Not Match In EFF", "integrity checker") + Tag("DEBIT And CREDIT  Must be Equal For JV", "0x4fa7d0"));
+                Err(errors, "Ledger lines do not balance: Debit " + Helpers.FmtAmt(dr) + " vs Credit " + Helpers.FmtAmt(cr)
+                    + " (difference " + Helpers.FmtAmt(Math.Abs(dr - cr)) + ")."
+                    + Tag("Cr. And Db Not Match In EFF", "integrity checker") + Tag("DEBIT And CREDIT  Must be Equal For JV", "0x4fa7d0"));
 
             // ---- G07 Journal: multi-contra  ("Multi - Contra Entry  . . . Can't Save" 0x534df4)
             if (v.Kind == VoucherKind.Journal && st != null)
@@ -207,7 +209,7 @@ namespace AccuVisionRepost.Core
             {
                 int ic = JetDb.GetInt(r, "ItemCode");
                 if (st != null && st.Item(ic) == null)
-                    Err(errors, "Item " + ic + " (line " + JetDb.GetInt(r, "Line_no") + ") is not in the Item master." + Tag("Item Not Found In Master", "0x52b790"));
+                    Err(errors, "Item " + ic + " (line " + JetDb.GetInt(r, "Line_no") + ") does not exist in the Item master." + Tag("Item Not Found In Master", "0x52b790"));
             }
         }
 

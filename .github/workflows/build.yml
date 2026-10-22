@@ -43,8 +43,12 @@ jobs:
           if (Test-Path $marker) { Get-Content $marker }
           if ($p.ExitCode -ne 0) {
             if (Test-Path $log) {
-              Select-String -Path $log -Pattern 'FAIL|Exception|SelfTest assertion' |
-                Select-Object -First 10 |
+              # Emit the interesting lines as check annotations: the job log itself is not
+              # always reachable from automation, annotations are.
+              Write-Host "---- last 40 lines of selftest_log.txt ----"
+              Get-Content $log -Tail 40 | ForEach-Object { Write-Host $_ }
+              Select-String -Path $log -Pattern 'FAIL|Exception|SelfTest assertion|VALIDATION FAILED|ERROR:' |
+                Select-Object -First 25 |
                 ForEach-Object { Write-Host ("::error ::" + ($_.Line -replace '%','%25')) }
             } else {
               Write-Host "::error ::SelfTest produced no log file (exe failed to start?)"
