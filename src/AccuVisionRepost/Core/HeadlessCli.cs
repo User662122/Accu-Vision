@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace AccuVisionRepost.Core
@@ -116,6 +117,12 @@ namespace AccuVisionRepost.Core
                 return SelfTest.RunUiTest(dir);
             }
 
+            if (cmd == "visualtest")
+            {
+                string dir = (rawArgs.Length > 1 && !IsSwitch(rawArgs[1])) ? rawArgs[1] : FindOptionValue(rawArgs, "--dir", "/dir");
+                return LedgerVisualSelfTest.Run(string.IsNullOrEmpty(dir) ? Path.GetTempPath() : dir);
+            }
+
             CliOptions opts = new CliOptions();
             List<string> parseErrors = new List<string>();
             ParseArgs(rawArgs, opts, parseErrors);
@@ -134,6 +141,12 @@ namespace AccuVisionRepost.Core
             {
                 List<string> errs = new List<string>() { "Database file not found: " + opts.DbPath };
                 return EmitFailure(opts, cmd, 1, errs, new List<string>(), "ERROR: Database file not found: " + opts.DbPath);
+            }
+
+            if (cmd == "visual-report")
+            {
+                try { return RunVisualReport(rawArgs, opts); }
+                catch (Exception ex) { Console.Error.WriteLine("ERROR: " + ex); return 1; }
             }
 
             try
@@ -360,6 +373,10 @@ namespace AccuVisionRepost.Core
                         break;
                     case "log":
                         nextVal(); // already handled by outer wrapper
+                        break;
+                    case "account":
+                    case "ledger":
+                        nextVal(); // consumed by visual-report
                         break;
                     case "json":
                         opts.JsonStdout = true;
@@ -952,6 +969,50 @@ namespace AccuVisionRepost.Core
         }
 
         // ================================================================ COMMAND HANDLERS
+
+        private static int RunVisualReport(string[] args, CliOptions opts)
+        {
+            LedgerSnapshot snapshot = LedgerSnapshot.Load(opts.DbPath, opts.Password);
+            string account = FindOptionValue(args, "--account", "/account");
+            string output = FindOptionValue(args, "--out", "/out");
+            if (string.IsNullOrEmpty(output)) output = Path.Combine(Path.GetTempPath(), "AccuVision-Ledger-Story");
+            string dir = Path.GetDirectoryName(Path.GetFullPath(output)); if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            DateTime from = snapshot.FyFrom, to = snapshot.FyTo; DateTime parsed;
+            if (Helpers.TryParseDate(FindOptionValue(args, "--from", "/from"), out parsed)) from = parsed;
+            if (Helpers.TryParseDate(FindOptionValue(args, "--to", "/to"), out parsed)) to = parsed;
+            LedgerMetrics m = null;
+            if (!string.IsNullOrEmpty(account))
+            {
+                LedgerAccount a = snapshot.Accounts.FirstOrDefault(x => string.Equals(x.Code, account, StringComparison.OrdinalIgnoreCase));
+                if (a == null) a = snapshot.Accounts.FirstOrDefault(x => x.Name.IndexOf(account, StringComparison.OrdinalIgnoreCase) >= 0);
+                if (a == null) throw new ArgumentException("Ledger not found: " + account);
+                m = snapshot.Compute(a.Code, from, to);
+            }
+            LedgerOverview o = snapshot.Overview(from, to);
+            Dictionary<string, object> report = new Dictionary<string, object>();
+            report["ok"] = true; report["readOnly"] = true; report["company"] = snapshot.Company; report["from"] = Helpers.FmtDateIso(from); report["to"] = Helpers.FmtDateIso(to);
+            report["dataThrough"] = Helpers.FmtDateIso(snapshot.DataTo); report["accounts"] = snapshot.Accounts.Count; report["activeLedgers"] = o.ActiveLedgers;
+            report["receivables"] = o.Receivables; report["payables"] = o.Payables; report["customerAdvances"] = o.CustomerAdvances;
+            if (m != null)
+            {
+                report["account"] = m.Account.Code; report["name"] = m.Account.Name; report["kind"] = m.Account.Kind;
+                report["opening"] = m.Opening; report["closing"] = m.Closing; report["sales"] = m.Sales; report["purchases"] = m.Purchases;
+                report["receipts"] = m.Receipts; report["payments"] = m.Payments; report["currentBillsPending"] = m.CurrentPending;
+                report["unlinkedCash"] = m.UnlinkedCash; report["carriedDuplicateGroups"] = m.CarriedDuplicates;
+                report["reconciliationDifference"] = m.ReconciliationDifference;
+                report["insights"] = m.Insights.Select(i => new Dictionary<string, object> { { "title", i.Title }, { "detail", i.Detail }, { "severity", i.Severity } }).ToList();
+                report["items"] = m.ItemMix.Select(i => new Dictionary<string, object> { { "name", i.Name }, { "value", i.Value }, { "detail", i.Detail } }).ToList();
+            }
+            File.WriteAllText(output + ".json", SimpleJson.Serialize(report, true), new UTF8Encoding(false));
+            using (AccuVisionRepost.Ui.LedgerVisualControl view = new AccuVisionRepost.Ui.LedgerVisualControl())
+            {
+                view.Size = new System.Drawing.Size(1220, 850); IntPtr handle = view.Handle;
+                view.LoadSnapshotForTest(snapshot); if (m != null) view.SelectLedger(m.Account.Code);
+                view.SaveCanvasPng(output + ".png");
+            }
+            Console.WriteLine("VISUAL REPORT OK (read-only)"); Console.WriteLine(output + ".json"); Console.WriteLine(output + ".png");
+            return 0;
+        }
 
         private static int RunProbe(CompanyDb db, DbProbe probe, CliOptions opts)
         {
@@ -1552,6 +1613,8 @@ HEADLESS COMMANDS:
                                     [EDIT FLAGS...] [--out-batch <posted.tsv|.csv|.json>] [--continue-on-error]
   AccuVisionRepost.exe /selftest    [<temp-dir>]
   AccuVisionRepost.exe /uitest      [<temp-dir>]
+  AccuVisionRepost.exe /visualtest  [<temp-dir>]
+  AccuVisionRepost.exe visual-report --db <Accurate.Mdb> [--account <code>] [--out <prefix>]
 
 EDIT FLAGS (for review, post, batch-review, batch-post):
   Date & Book:

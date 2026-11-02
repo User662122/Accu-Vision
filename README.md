@@ -244,3 +244,25 @@ Every headless command reports errors and warnings to:
 | `1` | Runtime or database connection/IO error (e.g., missing `.mdb` file) |
 | `2` | Invalid command-line arguments or malformed spec file |
 | `3` | Validation or pre-post check error (unbalanced Dr/Cr, duplicate `TAX_INV_NO`, group account, out-of-FY date, `AccNew.exe` running, or warning under `--strict`) |
+
+## Ledger Stories (read-only visualization)
+
+The **4. Ledger Stories** tab adds a visual, question-first view for every ledger:
+
+- Company overview: receivables, payables, advances/credits, sales vs purchases, monthly billing/cash trend, largest balances and attention list.
+- Customers/tenants: billed sales vs receipts, item/service mix, current-year bill settlement, aging, opening vs current balance, unallocated cash and rate ranges.
+- Suppliers: purchases vs payments, partial settlements, advances and pending bills.
+- Banks/cash: money in/out, internal transfers separated from external flows, counterparties and balance trail.
+- Income/expense: operating activity separated from year-end P&L transfers, counterparties, journals and monthly movement.
+- Every ledger: balance bridge, monthly activity heatmap, source-voucher evidence and PNG/CSV/HTML export.
+
+The visual engine opens Jet with `Mode=Read` and never posts or edits. Carried-forward duplicate bill references are flagged and excluded from current-bill totals; the account-master/opening balance remains authoritative. Bill settlement status is shown as stored in `BillHist` (including discounts in `Adj_Amt`), not inferred by blindly summing opening registers.
+
+Headless checks and reports:
+
+```bat
+AccuVisionRepost.exe /visualtest %TEMP%
+AccuVisionRepost.exe visual-report --db "C:\path\Accurate.Mdb" --pwd **** --account A000001522 --out "C:\reports\lotus"
+```
+
+`visual-report` writes `<out>.json` and `<out>.png` without changing the database.

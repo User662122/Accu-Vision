@@ -39,6 +39,8 @@ echo Building with %CSC% ...
   "%SRC%\Properties\AssemblyInfo.cs" ^
   "%SRC%\Core\JetDb.cs" ^
   "%SRC%\Core\CompanyDb.cs" ^
+  "%SRC%\Core\LedgerAnalytics.cs" ^
+  "%SRC%\Core\LedgerVisualSelfTest.cs" ^
   "%SRC%\Core\Voucher.cs" ^
   "%SRC%\Core\Helpers.cs" ^
   "%SRC%\Core\CloneEngine.cs" ^
@@ -48,6 +50,7 @@ echo Building with %CSC% ...
   "%SRC%\Core\HeadlessCli.cs" ^
   "%SRC%\Core\SelfTest.cs" ^
   "%SRC%\Ui\MainForm.cs" ^
+  "%SRC%\Ui\LedgerVisualControl.cs" ^
   "%SRC%\Ui\LookupDialog.cs"
 
 if not %ERRORLEVEL%==0 (

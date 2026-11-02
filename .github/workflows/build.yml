@@ -69,6 +69,28 @@ jobs:
             Write-Host ("::notice ::selftest_log.txt: " + $lines.Count + " lines; last line: " + ($lines[-1] -replace '%','%25'))
           }
 
+      - name: Run ledger visual self-tests (scratch database, read-only)
+        shell: pwsh
+        run: |
+          $exe = "src\AccuVisionRepost\bin\x86\Release\AccuVisionRepost.exe"
+          $work = Join-Path $env:RUNNER_TEMP "visualtest"
+          New-Item -ItemType Directory -Force $work | Out-Null
+          & $exe "/visualtest" $work | Tee-Object -FilePath (Join-Path $work "visualtest_log.txt")
+          $code = $LASTEXITCODE
+          Write-Host "visualtest exit code: $code"
+          if ($code -ne 0) {
+            if (Test-Path (Join-Path $work "visualtest_log.txt")) {
+              Get-Content (Join-Path $work "visualtest_log.txt") -Tail 40 | ForEach-Object { Write-Host $_ }
+              Select-String -Path (Join-Path $work "visualtest_log.txt") -Pattern 'FAIL|Exception|ERROR' |
+                Select-Object -First 25 |
+                ForEach-Object { Write-Host ("::error ::" + ($_.Line -replace '%','%25')) }
+            }
+            throw "Visual self-tests failed (exit $code)"
+          }
+          $verdict = Select-String -Path (Join-Path $work "visualtest_log.txt") -Pattern 'VISUALTEST PASSED' | Select-Object -First 1
+          if (-not $verdict) { throw "visualtest exited 0 but printed no VISUALTEST PASSED marker" }
+          Write-Host ("::notice ::" + ($verdict.Line -replace '%','%25'))
+
       - name: Upload exe
         uses: actions/upload-artifact@v4
         with:
@@ -86,4 +108,5 @@ jobs:
             build.log
             ${{ runner.temp }}\selftest\selftest_log.txt
             ${{ runner.temp }}\selftest\selftest_result.txt
+            ${{ runner.temp }}\visualtest\visualtest_log.txt
           if-no-files-found: ignore
