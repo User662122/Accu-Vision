@@ -129,6 +129,14 @@ posting recipes, but your live books deserve a test run:
 
 ---
 
+## Desktop-only entry workflow
+
+Load, edit, review and post entries through the desktop tabs. The former
+Excel/script automation commands, batch posting and silent UI/auto-confirm
+mode have been removed. Ledger Stories and its read-only exports remain.
+Only scratch-database developer tests and the read-only `visual-report`
+command remain available outside the desktop UI.
+
 ## For developers
 
 - `src/AccuVisionRepost` — C# WinForms, .NET Framework 4.8, x86,
@@ -139,10 +147,6 @@ posting recipes, but your live books deserve a test run:
 - `docs/BANK-NOTES.md` — CB vs RE/PA evidence and the first-run verification.
 - Built-in engine test on a scratch database:
   `AccuVisionRepost.exe /selftest %TEMP%` → must print `SELFTEST PASSED`.
-- Built-in headless WinForms UI test:
-  `AccuVisionRepost.exe /uitest %TEMP%` → must print `UITEST PASSED`.
-- Read-only database probe:
-  `AccuVisionRepost.exe /probe <path-to-Accurate.Mdb> [Password]`
 
 ### Continuous integration
 
@@ -154,96 +158,13 @@ itself. The job **fails the build** if the engine prints anything other than
 
 - the sources compile with no errors under the in-box toolchain, and
 - the posting engine wrote JV / SL / CB vouchers that read back exactly as the
-  self-test expects, and
-- the CLI refused each deliberately-bad voucher with exit code 3 and the
-  expected message.
+  self-test expects.
 
 The self-test's verdict lines are also published as check-run annotations
 (`gh api /repos/User662122/Accu-Vision/commits/<sha>/check-runs`), so the result
 is readable without downloading the job log.
 
 ---
-
-## Headless / Command-Line Mode (Excel-style automation, scripts & SSH)
-
-`AccuVisionRepost.exe` works **completely headlessly** from `cmd.exe`,
-PowerShell, batch scripts, VBA/LibreOffice macros, Python, or remote SSH
-sessions (e.g., PhoneFS) — with **zero GUI windows or modal popups**, full
-pre-post validation, detailed error/warning reporting, JSON/TSV/CSV output,
-and `KEY=VALUE` status files.
-
-Run `AccuVisionRepost.exe --help` to see all commands and flags.
-
-### 1. Probe Company Database (`probe`)
-Inspect company name, financial year, voucher series/books, next voucher
-numbers, accounts, items, add-ons, and whether `AccNew.exe` is running:
-```bat
-AccuVisionRepost.exe probe --db "D:\AccNew\HTEPL\00012526\Accurate.Mdb" --accounts --items --addons
-```
-
-### 2. Search Vouchers (`search`)
-Search Sales (`SL`), Journal (`JV`), Bank-Cash (`CB`), or Receipt/Payment
-(`RE`/`PA`) entries and print as a table, TSV (for Excel), or JSON:
-```bat
-AccuVisionRepost.exe search --db "D:\AccNew\HTEPL\00012526\Accurate.Mdb" --bt SL --latest-month --format tsv --out bills.tsv
-```
-
-### 3. Inspect & Export Editable JSON Spec (`inspect`)
-Inspect any voucher in full detail and optionally export an editable JSON
-specification:
-```bat
-AccuVisionRepost.exe inspect --db "D:\AccNew\HTEPL\00012526\Accurate.Mdb" --bt SL --vch 132 --export bill_132.json
-```
-
-### 4. Headless Review / Dry-Run Validation (`review`)
-Clone a voucher in memory, apply edits (date, +months, party, item, qty, rate,
-GST %, accounts, narration, cheque details, or `--spec file.json`), run all
-validation + live database checks (including duplicate `TAX_INV_NO` and
-`BillHist` pending-balance checks), and print the full review plan **without
-writing to the database**:
-```bat
-AccuVisionRepost.exe review --db "D:\AccNew\HTEPL\00012526\Accurate.Mdb" ^
-  --bt SL --vch 132 --new-date 2026-05-20 --rate 250 ^
-  --status-file status.txt --json-out review.json
-```
-
-### 5. Single Headless Post (`post`)
-Validate, back up `Accurate.Mdb`, post the new voucher inside a single atomic
-transaction, verify the inserted rows, and write `PostLog_*.txt`:
-```bat
-AccuVisionRepost.exe post --db "D:\AccNew\HTEPL\00012526\Accurate.Mdb" ^
-  --bt SL --vch 132 --plus-months 1 --rate 250 ^
-  --status-file status.txt --json-out post.json
-```
-
-### 6. Batch / Excel / TSV Two-Step Workflow (`batch-review` & `batch-post`)
-Just like the Excel/LibreOffice `BuildReview_Next` → `PerformEntry_Post`
-workflow, you can export a whole month of bills to an Excel-compatible
-`.tsv` or `.csv`, edit rates/dates/narrations or set `Select=N` on rows to
-skip, and post the batch headlessly:
-```bat
-REM Step 1: Build next month's review table (TSV/CSV opens directly in Excel)
-AccuVisionRepost.exe batch-review --db "D:\AccNew\HTEPL\00012526\Accurate.Mdb" ^
-  --bt SL --latest-month --plus-months 1 --export-batch next_month_review.tsv
-
-REM Step 2: Post all selected (Select=Y) rows from the reviewed TSV/CSV
-AccuVisionRepost.exe batch-post --db "D:\AccNew\HTEPL\00012526\Accurate.Mdb" ^
-  --batch-file next_month_review.tsv --out-batch posted_results.tsv --status-file batch_status.txt
-```
-
-### Error Reporting & Exit Codes
-Every headless command reports errors and warnings to:
-1. **Standard Output (`stdout`)** — full human-readable report (or structured JSON with `--json`).
-2. **Standard Error (`stderr`)** — concise `ERROR:` lines whenever validation or execution fails.
-3. **JSON (`--json` or `--json-out <file.json>`)** — includes `"ok": true|false`, `"exitCode"`, `"errors": [...]`, `"warnings": [...]`, and full voucher/plan details.
-4. **Status File (`--status-file <file.txt>`)** — `KEY=VALUE` lines (`STATUS=OK|ERROR`, `EXIT_CODE=0|1|2|3`, `ERROR=...`, `NEW_VCH=...`, `NEW_ID_NO=...`, `BACKUP=...`) for easy parsing from `.bat` or VBA.
-
-| Exit Code | Meaning |
-|---|---|
-| `0` | Success (Probe OK / Search OK / Review Valid / Posted OK / SelfTest Passed) |
-| `1` | Runtime or database connection/IO error (e.g., missing `.mdb` file) |
-| `2` | Invalid command-line arguments or malformed spec file |
-| `3` | Validation or pre-post check error (unbalanced Dr/Cr, duplicate `TAX_INV_NO`, group account, out-of-FY date, `AccNew.exe` running, or warning under `--strict`) |
 
 ## Ledger Stories (read-only visualization)
 
@@ -258,7 +179,7 @@ The **4. Ledger Stories** tab adds a visual, question-first view for every ledge
 
 The visual engine opens Jet with `Mode=Read` and never posts or edits. Carried-forward duplicate bill references are flagged and excluded from current-bill totals; the account-master/opening balance remains authoritative. Bill settlement status is shown as stored in `BillHist` (including discounts in `Adj_Amt`), not inferred by blindly summing opening registers.
 
-Headless checks and reports:
+Developer checks and read-only ledger reports (no voucher posting automation):
 
 ```bat
 AccuVisionRepost.exe /visualtest %TEMP%

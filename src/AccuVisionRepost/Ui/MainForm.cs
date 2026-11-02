@@ -53,15 +53,8 @@ namespace AccuVisionRepost.Ui
         private Dictionary<DataRow, string> _srcLineNarrations = new Dictionary<DataRow, string>();
         private Dictionary<DataRow, string> _lastAutoLineNarrations = new Dictionary<DataRow, string>();
 
-        public bool HeadlessMode { get; set; }
-        public List<string> HeadlessMessages { get; private set; }
-        public List<string> HeadlessErrors { get; private set; }
-        public PostResult LastPostResult { get; private set; }
-
         public MainForm()
         {
-            HeadlessMessages = new List<string>();
-            HeadlessErrors = new List<string>();
             Text = "AccuVisionRepost - AccNew Voucher Clone & Re-Post (Sales Multi Line / Bank / Journal)";
             Width = 1240; Height = 860;
             MinimumSize = new Size(980, 640);
@@ -71,38 +64,13 @@ namespace AccuVisionRepost.Ui
             LoadSettings();
         }
 
-        public void RecordHeadlessMessage(string title, string text, MessageBoxIcon icon)
-        {
-            string clean = "[" + (title ?? "") + "] " + (text ?? "").Replace("\r\n", " | ").Replace("\n", " | ");
-            HeadlessMessages.Add(clean);
-            if (icon == MessageBoxIcon.Error || icon == MessageBoxIcon.Warning)
-            {
-                HeadlessErrors.Add(clean);
-                Console.Error.WriteLine("UI " + (icon == MessageBoxIcon.Error ? "ERROR" : "WARNING") + " " + clean);
-            }
-            else
-            {
-                Console.WriteLine("UI INFO " + clean);
-            }
-        }
-
         private void ShowMsg(string text, string title, MessageBoxIcon icon)
         {
-            if (HeadlessMode)
-            {
-                RecordHeadlessMessage(title, text, icon);
-                return;
-            }
             MessageBox.Show(this, text, title, MessageBoxButtons.OK, icon);
         }
 
         private DialogResult ConfirmMsg(string text, string title)
         {
-            if (HeadlessMode)
-            {
-                RecordHeadlessMessage(title, "Auto-confirmed: " + text, MessageBoxIcon.Question);
-                return DialogResult.Yes;
-            }
             return MessageBox.Show(this, text, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         }
 
@@ -591,10 +559,6 @@ namespace AccuVisionRepost.Ui
 
         private string PickFromList(string title, List<string> items)
         {
-            if (HeadlessMode)
-            {
-                return (items != null && items.Count > 0) ? items[0] : null;
-            }
             using (Form f = new Form())
             {
                 f.Text = title; f.Width = 820; f.Height = 420; f.StartPosition = FormStartPosition.CenterParent;
@@ -627,7 +591,7 @@ namespace AccuVisionRepost.Ui
                                      + "    Accounts " + p.Accounts.Count + "  Items " + p.Items.Count;
                 if (p.FyFrom != DateTime.MinValue) { _fromDtp.Value = p.FyFrom; _toDtp.Value = p.FyTo; }
                 FillBookCombo();
-                if (!HeadlessMode && _visuals != null) _visuals.Connect(path, _pwd.Text);
+                if (_visuals != null) _visuals.Connect(path, _pwd.Text);
                 UpdateStatus();
                 SaveSettings();
                 ShowMsg("Connected to:\r\n" + p.CompanyName + "\r\nFinancial year " + Helpers.FmtDate(p.FyFrom) + " to " + Helpers.FmtDate(p.FyTo),
@@ -1414,7 +1378,6 @@ namespace AccuVisionRepost.Ui
                 SyncAllGrids(); SyncHeader();
                 VoucherKind postedKind = _v.Kind;
                 PostResult res = _engine.Post(_v, _backupChk.Checked);
-                LastPostResult = res;
                 _reviewTxt.Text = res.Report + "\r\nLog file: " + res.LogPath +
                     "\r\n\r\nNow open AccNew and check this voucher: Transaction > modify/find Vch No " + res.Plan.NewVchNo.Trim() + ".";
                 ShowMsg(
@@ -1442,97 +1405,6 @@ namespace AccuVisionRepost.Ui
         private void ShowError(Exception ex)
         {
             ShowMsg(ex.Message, "Error", MessageBoxIcon.Error);
-        }
-
-        // ================================================================ headless UI automation API
-
-        public bool IsConnected { get { return _db != null && _engine != null; } }
-        public int SearchResultCount { get { return _results == null ? 0 : _results.Count; } }
-        public LoadedVoucher CurrentVoucher { get { return _v; } }
-        public string CurrentReviewText { get { return _reviewTxt.Text; } }
-        public bool IsPostButtonEnabled { get { return _postBtn.Enabled; } }
-        public List<string> CurrentValidationErrors
-        {
-            get
-            {
-                List<string> errs = _postBtn.Tag as List<string>;
-                return errs == null ? new List<string>() : new List<string>(errs);
-            }
-        }
-
-        public bool HeadlessConnect(string dbPath, string password, string userId)
-        {
-            _dbPath.Text = dbPath ?? "";
-            if (password != null) _pwd.Text = password;
-            if (userId != null) _userId.Text = userId;
-            ConnectDb();
-            return IsConnected;
-        }
-
-        public int HeadlessSearch(int kindIndex, string searchText, DateTime? fromDate, DateTime? toDate)
-        {
-            if (kindIndex >= 0 && kindIndex < _kindCombo.Items.Count)
-                _kindCombo.SelectedIndex = kindIndex;
-            if (fromDate.HasValue) _fromDtp.Value = fromDate.Value;
-            if (toDate.HasValue) _toDtp.Value = toDate.Value;
-            _searchTxt.Text = searchText ?? "";
-            DoSearch();
-            return SearchResultCount;
-        }
-
-        public bool HeadlessSelectAndLoad(int rowIndex)
-        {
-            if (rowIndex < 0 || rowIndex >= _resultsGrid.Rows.Count) return false;
-            _resultsGrid.ClearSelection();
-            _resultsGrid.Rows[rowIndex].Selected = true;
-            LoadSelected();
-            return _v != null;
-        }
-
-        public void HeadlessSetNewDate(DateTime dt)
-        {
-            _newDateDtp.Value = dt.Date;
-            OnNewDateChanged();
-        }
-
-        public void HeadlessSetPartyCode(string code)
-        {
-            _partyCodeTxt.Text = code ?? "";
-            PartyCodeEdited();
-        }
-
-        public void HeadlessSetTaxInvManual(string taxInvNo)
-        {
-            _taxInvModeCombo.SelectedIndex = 2;
-            _taxInvTxt.Text = taxInvNo ?? "";
-            SyncHeader();
-        }
-
-        public void HeadlessSetItemRate(int rowIndex, double rate)
-        {
-            if (rowIndex < 0 || rowIndex >= _itemGrid.Rows.Count) return;
-            _itemGrid.Rows[rowIndex].Cells[6].Value = Helpers.FmtNumRaw(rate);
-            ItemCellEdited(rowIndex, 6);
-        }
-
-        public void HeadlessOpenReview()
-        {
-            _tabs.SelectedTab = _tabReview;
-            RefreshReview();
-        }
-
-        public void HeadlessSetConfirm(bool confirm, bool makeBackup)
-        {
-            _backupChk.Checked = makeBackup;
-            _confirmChk.Checked = confirm;
-            UpdatePostEnabled();
-        }
-
-        public PostResult HeadlessClickPost()
-        {
-            LastPostResult = null;
-            DoPost();
-            return LastPostResult;
         }
 
         // ================================================================ settings

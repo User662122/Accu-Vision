@@ -19,46 +19,20 @@ namespace AccuVisionRepost
         [STAThread]
         private static int Main(string[] args)
         {
-            if (HeadlessCli.IsCliInvocation(args))
-            {
-                return HeadlessCli.Run(args);
-            }
+            if (args != null && args.Length > 0)
+                return Diagnostics.Run(args);
 
-            // GUI mode: hide the console window unless --show-console was requested
-            bool showConsole = false;
-            bool headlessGui = false;
-            string initDb = null;
-            string initPwd = null;
-            if (args != null)
+            // Desktop mode: hide the diagnostic console.
+            try
             {
-                for (int i = 0; i < args.Length; i++)
-                {
-                    string a = (args[i] ?? "").Trim().ToLowerInvariant();
-                    if (a == "--show-console" || a == "/show-console") showConsole = true;
-                    else if (a == "--headless" || a == "/headless") headlessGui = true;
-                    else if ((a == "--db" || a == "/db") && i + 1 < args.Length) { i++; initDb = args[i]; }
-                    else if ((a == "--pwd" || a == "/pwd") && i + 1 < args.Length) { i++; initPwd = args[i]; }
-                }
+                IntPtr hWnd = GetConsoleWindow();
+                if (hWnd != IntPtr.Zero) ShowWindow(hWnd, SW_HIDE);
             }
-
-            if (!showConsole && !headlessGui)
-            {
-                try
-                {
-                    IntPtr hWnd = GetConsoleWindow();
-                    if (hWnd != IntPtr.Zero) ShowWindow(hWnd, SW_HIDE);
-                }
-                catch { }
-            }
+            catch { }
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             MainForm form = new MainForm();
-            form.HeadlessMode = headlessGui;
-            if (!string.IsNullOrEmpty(initDb))
-            {
-                form.HeadlessConnect(initDb, initPwd, null);
-            }
             Application.Run(form);
             return 0;
         }
