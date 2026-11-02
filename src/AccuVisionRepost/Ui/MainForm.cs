@@ -41,6 +41,7 @@ namespace AccuVisionRepost.Ui
 
         private TabControl _tabs;
         private TabPage _tabEdit, _tabReview;
+        private LedgerVisualControl _visuals;
 
         private CompanyDb _db;
         private CloneEngine _engine;
@@ -155,6 +156,10 @@ namespace AccuVisionRepost.Ui
             BuildFindTab(tabFind);
             BuildEditTab(_tabEdit);
             BuildReviewTab(_tabReview);
+            TabPage tabVisuals = new TabPage("4. Ledger Stories");
+            _visuals = new LedgerVisualControl();
+            tabVisuals.Controls.Add(_visuals);
+            _tabs.TabPages.Add(tabVisuals);
         }
 
         private void BuildFindTab(TabPage tab)
@@ -622,6 +627,7 @@ namespace AccuVisionRepost.Ui
                                      + "    Accounts " + p.Accounts.Count + "  Items " + p.Items.Count;
                 if (p.FyFrom != DateTime.MinValue) { _fromDtp.Value = p.FyFrom; _toDtp.Value = p.FyTo; }
                 FillBookCombo();
+                if (!HeadlessMode && _visuals != null) _visuals.Connect(path, _pwd.Text);
                 UpdateStatus();
                 SaveSettings();
                 ShowMsg("Connected to:\r\n" + p.CompanyName + "\r\nFinancial year " + Helpers.FmtDate(p.FyFrom) + " to " + Helpers.FmtDate(p.FyTo),
@@ -630,6 +636,7 @@ namespace AccuVisionRepost.Ui
             catch (Exception ex)
             {
                 _db = null; _engine = null;
+                if (_visuals != null) _visuals.Disconnect();
                 ShowMsg("Could not open the database:\r\n\r\n" + ex.Message +
                     "\r\n\r\nCheck: (1) path is correct, (2) Password is honda757acc, (3) this is a 32-bit process (exe must be x86), (4) the file is not open exclusively elsewhere.",
                     "Connect failed", MessageBoxIcon.Error);

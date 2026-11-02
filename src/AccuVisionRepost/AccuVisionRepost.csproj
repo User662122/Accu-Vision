@@ -43,6 +43,8 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Core\JetDb.cs" />
     <Compile Include="Core\CompanyDb.cs" />
+    <Compile Include="Core\LedgerAnalytics.cs" />
+    <Compile Include="Core\LedgerVisualSelfTest.cs" />
     <Compile Include="Core\Voucher.cs" />
     <Compile Include="Core\Helpers.cs" />
     <Compile Include="Core\CloneEngine.cs" />
@@ -52,6 +54,7 @@
     <Compile Include="Core\HeadlessCli.cs" />
     <Compile Include="Core\SelfTest.cs" />
     <Compile Include="Ui\MainForm.cs" />
+    <Compile Include="Ui\LedgerVisualControl.cs" />
     <Compile Include="Ui\LookupDialog.cs" />
   </ItemGroup>
   <ItemGroup>

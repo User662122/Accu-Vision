@@ -388,6 +388,12 @@ namespace AccuVisionRepost.Core
 
         // ------------------------------------------------------------ scratch DB
 
+        internal static void CreateScratch(string path)
+        {
+            CreateMdb(path); JetDb jet = new JetDb(path, "");
+            using (OleDbConnection cn = jet.Open(false)) { CreateTables(jet, cn); Seed(jet, cn); }
+        }
+
         private static void CreateMdb(string path)
         {
             Type catType = Type.GetTypeFromProgID("ADOX.Catalog");
