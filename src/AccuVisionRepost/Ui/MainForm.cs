@@ -110,31 +110,60 @@ namespace AccuVisionRepost.Ui
 
         private void BuildUi()
         {
-            Panel top = new Panel();
+            TableLayoutPanel top = new TableLayoutPanel();
             top.Dock = DockStyle.Top;
-            top.Height = 86;
+            top.AutoSize = true;
+            top.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             top.Padding = new Padding(8);
             top.BackColor = Color.FromArgb(238, 242, 247);
+            top.ColumnCount = 3;
+            top.RowCount = 4;
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            for (int row = 0; row < 4; row++)
+                top.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            Label l1 = new Label(); l1.Text = "Company database (Accurate.Mdb):"; l1.Location = new Point(8, 10); l1.AutoSize = true;
-            _dbPath = new TextBox(); _dbPath.Location = new Point(8, 30); _dbPath.Width = 560;
-            Button browse = new Button(); browse.Text = "Browse..."; browse.Location = new Point(574, 28); browse.Width = 86;
+            Label l1 = new Label(); l1.Text = "Company database (Accurate.Mdb):"; l1.AutoSize = true;
+            top.Controls.Add(l1, 0, 0);
+            top.SetColumnSpan(l1, 3);
+            _dbPath = new TextBox(); _dbPath.Dock = DockStyle.Fill;
+            _dbPath.KeyDown += delegate(object sender, KeyEventArgs e)
+            {
+                if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; ConnectDb(); }
+            };
+            Button browse = new Button(); browse.Text = "Browse..."; browse.AutoSize = true;
             browse.Click += delegate { BrowseDb(); };
-            Button find = new Button(); find.Text = "Find in folder..."; find.Location = new Point(664, 28); find.Width = 112;
+            Button find = new Button(); find.Text = "Find in folder..."; find.AutoSize = true;
             find.Click += delegate { FindDatabases(); };
-            Label l2 = new Label(); l2.Text = "DB Password:"; l2.Location = new Point(786, 10); l2.AutoSize = true;
-            _pwd = new TextBox(); _pwd.Location = new Point(786, 30); _pwd.Width = 130; _pwd.Text = "honda757acc";
-            Label l3 = new Label(); l3.Text = "Operator (UserId):"; l3.Location = new Point(926, 10); l3.AutoSize = true;
-            _userId = new TextBox(); _userId.Location = new Point(926, 30); _userId.Width = 90;
-            Button connect = new Button(); connect.Text = "CONNECT"; connect.Location = new Point(1026, 26); connect.Width = 110; connect.Height = 30;
+            top.Controls.Add(_dbPath, 0, 1);
+            top.Controls.Add(browse, 1, 1);
+            top.Controls.Add(find, 2, 1);
+
+            FlowLayoutPanel credentials = new FlowLayoutPanel();
+            credentials.AutoSize = true; credentials.Dock = DockStyle.Fill;
+            Label l2 = new Label(); l2.Text = "DB Password:"; l2.AutoSize = true;
+            _pwd = new TextBox(); _pwd.Width = 130; _pwd.Text = "honda757acc";
+            Label l3 = new Label(); l3.Text = "Operator (UserId):"; l3.AutoSize = true;
+            _userId = new TextBox(); _userId.Width = 90;
+            credentials.Controls.AddRange(new Control[] { l2, _pwd, l3, _userId });
+            top.Controls.Add(credentials, 0, 2);
+            Button connect = new Button(); connect.Text = "CONNECT / RECONNECT";
+            connect.AutoSize = true; connect.Dock = DockStyle.Fill;
             connect.Font = new Font(Font, FontStyle.Bold);
             connect.Click += delegate { ConnectDb(); };
-            _companyLbl = new Label(); _companyLbl.Location = new Point(8, 58); _companyLbl.AutoSize = true;
-            _companyLbl.Font = new Font(Font, FontStyle.Bold);
-            _companyLbl.Text = "Not connected. Select Accurate.Mdb of the company + financial year you want to post into.";
-            _statusLbl = new Label(); _statusLbl.Location = new Point(700, 58); _statusLbl.AutoSize = true; _statusLbl.ForeColor = Color.DarkRed;
+            top.Controls.Add(connect, 1, 2);
+            top.SetColumnSpan(connect, 2);
 
-            top.Controls.AddRange(new Control[] { l1, _dbPath, browse, find, l2, _pwd, l3, _userId, connect, _companyLbl, _statusLbl });
+            FlowLayoutPanel connectionStatus = new FlowLayoutPanel();
+            connectionStatus.AutoSize = true; connectionStatus.Dock = DockStyle.Fill;
+            _companyLbl = new Label(); _companyLbl.AutoSize = true;
+            _companyLbl.Font = new Font(Font, FontStyle.Bold);
+            _companyLbl.Text = "Not connected. Browse to select and connect to a company database.";
+            _statusLbl = new Label(); _statusLbl.AutoSize = true; _statusLbl.ForeColor = Color.DarkRed;
+            connectionStatus.Controls.AddRange(new Control[] { _companyLbl, _statusLbl });
+            top.Controls.Add(connectionStatus, 0, 3);
+            top.SetColumnSpan(connectionStatus, 3);
             Controls.Add(top);
 
             _tabs = new TabControl();
@@ -555,7 +584,11 @@ namespace AccuVisionRepost.Ui
             {
                 d.Title = "Select Accurate.Mdb (company financial-year database)";
                 d.Filter = "AccNew database (Accurate.Mdb)|Accurate.Mdb|Access database (*.mdb)|*.mdb|All files (*.*)|*.*";
-                if (d.ShowDialog() == DialogResult.OK) _dbPath.Text = d.FileName;
+                if (d.ShowDialog(this) == DialogResult.OK)
+                {
+                    _dbPath.Text = d.FileName;
+                    ConnectDb();
+                }
             }
         }
 
@@ -573,7 +606,11 @@ namespace AccuVisionRepost.Ui
                     return;
                 }
                 string picked = PickFromList("Company databases found", found);
-                if (picked != null) _dbPath.Text = picked;
+                if (picked != null)
+                {
+                    _dbPath.Text = picked;
+                    ConnectDb();
+                }
             }
         }
 
